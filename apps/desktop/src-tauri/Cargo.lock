@@ -2611,6 +2611,7 @@ version = "0.1.0"
 dependencies = [
  "fs2",
  "rusqlite",
+ "serde",
  "sha2",
  "tauri",
  "tauri-build",

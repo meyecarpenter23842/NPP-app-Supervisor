@@ -1,3 +1,4 @@
+mod commands;
 mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -10,7 +11,12 @@ pub fn run() {
             app.manage(storage);
             Ok(())
         })
-        // M1.2 native storage only: no business commands exposed to WebView.
+        .invoke_handler(tauri::generate_handler![
+            commands::health,
+            commands::get_operator,
+            commands::create_operator,
+            commands::update_operator,
+        ])
         .run(tauri::generate_context!())
         .expect("unable to start Sales Supervisor");
 }
