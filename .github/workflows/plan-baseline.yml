@@ -30,3 +30,6 @@ jobs:
           PY
       - name: SQLite baseline smoke test
         run: python tests/smoke_sqlite.py
+
+      - name: M1.2 legacy schema conversion smoke
+        run: python tests/smoke_migration.py

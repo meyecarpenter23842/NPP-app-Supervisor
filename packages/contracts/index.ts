@@ -1,5 +1,5 @@
 /** Typed business DTO baseline. Rust serde DTOs must use the exact same contract keys. */
-export type Role = 'SUP' | 'ASM';
+export type Role = 'SALES' | 'SUP' | 'ASM';
 export type DataKind = 'SALES_IN' | 'SALES_OUT' | 'XNT' | 'TARGET' | 'NPP' | 'SKU' | 'EMPLOYEE' | 'OUTLET';
 export type DataState = 'VALID' | 'PARTIAL' | 'MISSING' | 'STALE' | 'CONFLICT';
 export type ImportStatus = 'STAGED' | 'VALIDATED' | 'COMMITTED' | 'REJECTED' | 'SUPERSEDED';
