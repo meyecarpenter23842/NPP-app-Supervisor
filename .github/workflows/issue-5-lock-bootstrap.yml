@@ -1,0 +1,23 @@
+name: One-time Rust lock bootstrap M1.2
+on:
+  push:
+    branches: [feat/issue-5-sqlite-operator]
+permissions:
+  contents: write
+jobs:
+  generate:
+    if: "!contains(github.event.head_commit.message, '[cargo lock bootstrap]')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - name: Commit resolved Rust dependencies on feature branch
+        shell: bash
+        run: |
+          git add apps/desktop/src-tauri/Cargo.lock
+          if ! git diff --cached --quiet; then
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "build: resolve M1.2 Rust dependencies [cargo lock bootstrap]"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
