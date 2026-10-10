@@ -1,3 +1,15 @@
+# Sales SUP/ASM Desktop — Architecture Baseline (chưa phải app chạy được)
+
+**Đọc trước:** [MASTER_PLAN.md](MASTER_PLAN.md) — tài liệu quyết định ưu tiên, trạng thái owner-review.  
+**Roadmap:** [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) — kế hoạch thực thi chi tiết, chưa cấp phép code khi chưa chốt Master Plan.  
+**Đặc tả cũ:** [docs/MVP_SPEC.md](docs/MVP_SPEC.md) — baseline cần cập nhật ở Issue code, không thay thế Master Plan.
+
+**Các quyết định quan trọng:** Offline-first Windows; backend Rust + SQLite chạy cùng app trên máy khách; **01 người mua là 01 Local Operator** (SALES/SUP/ASM); nhân sự quản lý là dữ liệu nghiệp vụ, **không có login phụ**; license qua Key Manager, phát hành và update qua R2 riêng sau merge và owner phê duyệt.
+
+**Tình trạng:** Repo đang là bộ thiết kế/schema/Excel mẫu, chưa có Tauri app, API/DB cloud, installer, License client hoặc updater.
+
+---
+
 # Sales SUP/ASM Desktop — MVP Architecture Kit
 
 Bộ tài liệu bàn giao để **bắt đầu lập trình** ứng dụng Desktop FMCG quản lý Sales SUP/ASM. Đây **chưa phải ứng dụng chạy được** và **chưa thay đổi repo NPP-Platform**.
