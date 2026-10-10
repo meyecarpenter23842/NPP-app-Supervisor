@@ -19,7 +19,7 @@ export const businessPages: readonly BusinessPage[] = [
   { id: 'distributors', title: 'Nhà phân phối', shortTitle: 'Nhà phân phối', description: 'Danh mục nhà phân phối, hồ sơ và phạm vi tuyến bán hàng.', group: 'QUẢN TRỊ', views: ['Danh sách NPP', 'Hồ sơ', 'Tuyến bán hàng'] },
   { id: 'team', title: 'Đội ngũ kinh doanh', shortTitle: 'Đội ngũ kinh doanh', description: 'Cấu trúc SALES / SUP / ASM cùng lịch sử phân công hiệu lực.', group: 'QUẢN TRỊ', views: ['Danh sách nhân sự', 'Cây quản lý', 'Lịch sử phân công'] },
   { id: 'targets', title: 'Chỉ tiêu & KPI', shortTitle: 'Chỉ tiêu & KPI', description: 'So sánh chỉ tiêu với kết quả trong đúng phạm vi và kỳ báo cáo.', group: 'QUẢN TRỊ', views: ['Chỉ tiêu', 'Thực hiện', 'Đối chiếu KPI'] },
-  { id: 'sku', title: 'Phân tích SKU', shortTitle: 'Phân tích SKU', description: 'Phân tích cơ cấu sản phẩm, đóng góp và biến động theo nhà phân phối.', group: 'QUẢN TRỊ', views: ['Theo SKU', 'Theo nhà phân phối', 'Xu hướng'] },
+  { id: 'sku', title: 'Phân tích SKU', shortTitle: 'Phân tích SKU', description: 'Phân tích cơ cấu sản phẩm, đóng góp và biến động theo nhà phân phối.', group: 'QUẢN TRỊ', views: ['Theo SKU', 'Theo nhà phân phối', 'Xu hướng', 'Danh mục sản phẩm'] },
   { id: 'reports', title: 'Báo cáo', shortTitle: 'Báo cáo', description: 'Tập hợp các loại báo cáo, lịch sử xuất và trạng thái nguồn.', group: 'QUẢN TRỊ', views: ['Danh mục báo cáo', 'Lịch sử xuất', 'Nguồn dữ liệu'] },
 ];
 
