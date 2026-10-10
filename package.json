@@ -1,0 +1,5 @@
+{
+ "name":"sales-supervisor-workspace","private":true,"version":"0.1.0",
+ "packageManager":"npm@10.9.2","workspaces":["apps/desktop"],
+ "scripts":{"dev":"npm run dev -w @salescenter/desktop","tauri":"npm run tauri -w @salescenter/desktop --","lint":"npm run lint -w @salescenter/desktop","typecheck":"npm run typecheck -w @salescenter/desktop","test":"npm run test -w @salescenter/desktop","build":"npm run build -w @salescenter/desktop"}
+}
