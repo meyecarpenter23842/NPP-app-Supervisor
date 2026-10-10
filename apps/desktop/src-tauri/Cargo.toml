@@ -1,0 +1,16 @@
+[package]
+name = "sales-supervisor"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+build = "build.rs"
+
+[lib]
+name = "sales_supervisor"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = "2"
+
+[dependencies]
+tauri = "2"

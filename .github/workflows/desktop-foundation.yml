@@ -1,0 +1,52 @@
+name: Desktop foundation
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  frontend:
+    name: frontend-lint-typecheck-test-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+  windows:
+    name: windows-rust-check-test-build
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - run: npm ci
+      - run: npm run build
+      - run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check
+      - run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+      - name: Windows executable without installer
+        run: npm run tauri -- build --no-bundle
+        working-directory: apps/desktop
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "apps/desktop/src-tauri/target/release/sales-supervisor.exe")) {
+            throw "Windows desktop executable not found"
+          }
