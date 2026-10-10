@@ -1,6 +1,6 @@
 mod commands;
-mod storage;
 mod master_data;
+mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

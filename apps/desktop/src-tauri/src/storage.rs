@@ -297,11 +297,10 @@ fn migrate(conn: &Connection, app_data: &Path) -> Result<()> {
         let tx = conn.unchecked_transaction()?;
         tx.execute_batch(SCHEMA_003)?;
         write_ledger(&tx, "003", SCHEMA_003)?;
-        let violations: i64 = tx.query_row(
-            "SELECT count(*) FROM pragma_foreign_key_check",
-            [],
-            |r| r.get(0),
-        )?;
+        let violations: i64 =
+            tx.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })?;
         if violations != 0 {
             return Err(format!("{violations} foreign-key violations").into());
         }
