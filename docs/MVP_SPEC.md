@@ -1,4 +1,4 @@
-> **CHÚ Ý — Thiết kế baseline chưa cập nhật (2026-10-10).** [MASTER_PLAN.md](../MASTER_PLAN.md) là nguồn ưu tiên. Người mua chỉ có **một Local Operator** loại SALES/SUP/ASM; employees và SUP dưới quyền chỉ là dữ liệu kinh doanh, KHÔNG có login. Backend + SQLite hoàn toàn cục bộ theo bản cài; Key Manager License API / R2 chỉ dùng cho license và phát hành bản cập nhật. Bảng Persona, Role TypeScript và app_profiles trong baseline bên dưới chưa phù hợp và phải sửa ở các Issue triển khai sau gate Master Plan. [Kế hoạch thực thi](IMPLEMENTATION_PLAN.md).
+> **CHÚ Ý — Thiết kế baseline chưa cập nhật (2026-10-10).** [MASTER_PLAN.md](../MASTER_PLAN.md) là nguồn ưu tiên; các quyết định M0 đã chốt và các phần còn chờ xác minh xem [M0_CONTRACTS.md](M0_CONTRACTS.md). Người mua chỉ có **một Local Operator** loại SALES/SUP/ASM; employees và SUP dưới quyền chỉ là dữ liệu kinh doanh, KHÔNG có login. Backend + SQLite hoàn toàn cục bộ theo bản cài; Key Manager License API / R2 chỉ dùng cho license và phát hành bản cập nhật. Bảng Persona, Role TypeScript và app_profiles trong baseline bên dưới chưa phù hợp và phải sửa ở các Issue triển khai sau gate Master Plan. [Kế hoạch thực thi](IMPLEMENTATION_PLAN.md).
 >
 # Sales SUP/ASM Desktop — MVP v1.0
 
@@ -336,4 +336,4 @@ Sales-Supervisor-Desktop/
 
 ## 13. Next engineering task
 
-Create `Sprint 0` issue with acceptance gate: app shell + SQLite schema migrations + local profile + Windows build pipeline. Then build `Sprint 1` importer using bundled workbook templates, initially supporting NPP/SKU/EMPLOYEE before Sales facts.
+**Lưu ý lịch trình cũ:** phần Sprint 0/1 phía trên là baseline trước Master Plan PR #1. Không trực tiếp tạo Issue từ mục này. Quy trình hiện hành: M0 contract approval → tạo các Issue M1.1–M1.4 sau owner gate → M2 master/import → M3 reports, theo `docs/IMPLEMENTATION_PLAN.md` và `docs/M0_CONTRACTS.md`.
