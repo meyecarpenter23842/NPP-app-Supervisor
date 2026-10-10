@@ -1,5 +1,6 @@
 mod commands;
 mod storage;
+mod master_data;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,6 +17,12 @@ pub fn run() {
             commands::get_operator,
             commands::create_operator,
             commands::update_operator,
+            master_data::list_master_data,
+            master_data::create_master_item,
+            master_data::rename_master_item,
+            master_data::set_master_active,
+            master_data::create_master_link,
+            master_data::end_master_link,
         ])
         .run(tauri::generate_context!())
         .expect("unable to start Sales Supervisor");

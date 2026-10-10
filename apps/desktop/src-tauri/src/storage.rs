@@ -38,7 +38,7 @@ pub struct LocalOperator {
 }
 
 pub struct AppDatabase {
-    connection: Mutex<Connection>,
+    pub(crate) connection: Mutex<Connection>,
     _single_process_lock: File,
     pub path: PathBuf,
 }
