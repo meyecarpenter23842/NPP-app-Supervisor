@@ -45,7 +45,7 @@ export default function App() {
       {startupError ? (
         <main className="center-stage" aria-live="assertive">
           <section className="startup-error">
-            <Text as="h1" size={500} weight="semibold">Không thể mở dữ liệu cục bộ</Text>
+            <Text as="h1" size={500} weight="semibold">Không thể mở dữ liệu trên máy</Text>
             <Text>{startupError}</Text>
             <Button appearance="primary" onClick={() => {
               setStartupError(null);

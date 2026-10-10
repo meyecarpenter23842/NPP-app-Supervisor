@@ -29,13 +29,13 @@ export class IpcError extends Error {
 }
 
 const messages: Record<IpcErrorCode, string> = {
-  VALIDATION_ERROR: 'Thông tin người sử dụng không hợp lệ.',
+  VALIDATION_ERROR: 'Thông tin nhập chưa hợp lệ. Vui lòng kiểm tra lại.',
   OPERATOR_EXISTS: 'Ứng dụng đã có một người sử dụng. Không thể tạo thêm.',
   OPERATOR_NOT_FOUND: 'Chưa có thông tin người sử dụng.',
-  STORAGE_ERROR: 'Không thể truy cập dữ liệu cục bộ. Vui lòng thử lại.',
-  MASTER_CONFLICT: 'Mã trùng hoặc quan hệ có thời gian hiệu lực xung đột.',
+  STORAGE_ERROR: 'Không thể đọc hoặc lưu dữ liệu trên máy. Vui lòng thử lại.',
+  MASTER_CONFLICT: 'Mã đã được sử dụng hoặc thời gian phân công bị trùng. Hãy kiểm tra lại.',
   MASTER_NOT_FOUND: 'Không tìm thấy dữ liệu cần sửa.',
-  CONNECTION_ERROR: 'Không kết nối được với ứng dụng desktop. Vui lòng mở ứng dụng Windows.',
+  CONNECTION_ERROR: 'Ứng dụng không phản hồi. Hãy đóng rồi mở lại ứng dụng.',
 };
 
 export function normalizeIpcError(reason: unknown): IpcError {
