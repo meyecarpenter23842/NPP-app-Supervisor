@@ -64,6 +64,15 @@ Ví dụ operator ASM quản lý SUP A → SALES A1, A2 và SUP B → SALES B1; 
 - Cấu hình operator SALES hiển thị nghiệp vụ hợp lý cho nhân viên đơn lẻ, SUP cho đội/1-nhiều NPP, ASM cho toàn khu vực được cấu hình. Không lấy “role” của local operator làm cơ chế chặn truy cập server.
 - Không dựng “đơn hàng” do app tự bán hàng; app chỉ phân tích dòng Sales Out được import. Thống nhất văn bản tiếng Việt; bảng có loading/empty/error/source states, hỗ trợ tìm nhanh và keyboard.
 
+## 7A. Bắt buộc đọc GPT Skills trước khi làm UI/UX (UI/UX SKILL GATE)
+- **Trước khi thiết kế giao diện, sửa component/layout, làm Dashboard, hoặc review UI/UX:** agent/ChatGPT phải kiểm tra danh sách skill thực sự có trong môi trường làm việc, **đọc nội dung SKILL.md/instructions của skill phù hợp trước khi viết code hoặc nhận xét thiết kế**. Không chỉ nêu tên skill rồi tự nhận đã áp dụng.
+- **Ưu tiên skill theo quy tắc dự án:** `professional-ui-design` cho layout/design system/typography/spacing/Office Enterprise, và `professional-frontend-qa` cho browser/desktop UI QA, responsive, accessible, interaction, overflow, lỗi visual. **Chỉ đọc và sử dụng nếu thật sự khả dụng** trong môi trường agent tương ứng; nếu không khả dụng, ghi rõ “không có skill này”, áp dụng checklist thủ công và không tuyên bố đã đọc.
+- Skill GPT hiện có thể sử dụng trong một số môi trường (tùy lần chạy): `build-dashboard`/`visualize-data` cho biểu đồ/độ rõ KPI và `react-best-practices` cho chất lượng component React/TypeScript. Không ép dùng skill dành cho backend/cloud vào desktop local và không ép thay design system đã chốt chỉ vì skill đề cập thư viện khác.
+- UI/UX implementation phải tuân thủ Fluent UI 9, desktop-first Windows văn phòng, nhất quán component token, typography, bảng dữ liệu dày thông tin nhưng dễ đọc, keyboard navigation, hover/focus/disabled/loading/empty/error states, contrast/accessibility, data state & nguồn KPI minh bạch.
+- **UI/UX QA là gate của PR:** agent tự kiểm tra màn hình thực tế ở ít nhất 1366×768 và 1920×1080, độ co giãn cửa sổ, zoom/font scale, DataGrid dài, dữ liệu trống/lỗi, modal/filter/import flow, keyboard và visual consistency; đính bằng chứng (ảnh/screen recording hoặc QA report phù hợp) và log test. Không đánh PASS chỉ bằng nhìn code hoặc mockup.
+- Mỗi Issue có UI/UX phải ghi trong mô tả: skill đã đọc (tên và phiên bản/nguồn nếu có), skill thiếu, tiêu chí thiết kế áp dụng, test/QA đã chạy, lỗi và cách xử lý. ChatGPT review theo bằng chứng, không tự nhận “QA done” nếu chưa kiểm nghiệm được.
+- Với bug UI: tái hiện → xác định root cause → sửa đúng tầng → regression test; không thay đổi API/business contracts chỉ để chỉnh nhãn hoặc bố cục hiển thị.
+
 ## 8. Key Manager licensing — đã audit, phạm vi tích hợp chưa có
 Repo tham khảo: meyecarpenter23842/key-manager (main tại 97c1617ab8a6d5217acd695cb824f7f6d78dbb4e khi audit).
 - Key Manager Admin là app Tauri; Admin API/License API hoạt động online riêng. Offline entitlement ký Ed25519 nằm trong docs/offline-license-v1.md: client chỉ nhúng public key, kiểm signature, app/license/device binding và offline_valid_until.

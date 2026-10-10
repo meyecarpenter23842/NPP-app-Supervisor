@@ -11,6 +11,12 @@
 - [ ] Review PR Master Plan và required CI xanh; owner duyệt merge; owner kéo main về local khi cần.
 **Gate:** Master Plan đã được owner duyệt và merge + acceptance/KPI definitions thống nhất. Không tạo Issue code trước gate.
 
+### Bắt buộc UI/UX Skill Gate trước mọi Issue giao diện
+- [ ] Liệt kê và đọc các GPT skills khả dụng trước khi tạo/sửa UI, nhất là `professional-ui-design` và `professional-frontend-qa` nếu có. Nếu thiếu thì ghi rõ, dùng checklist manual tương đương; **không nhận đã dùng khi chưa đọc**.
+- [ ] Khi thích hợp đọc `build-dashboard`, `visualize-data`, `react-best-practices` (nếu khả dụng) để kiểm KPI/dashboard, trực quan hóa và chất lượng React; vẫn giữ Fluent UI 9 đã thống nhất.
+- [ ] Trong PR nêu skill thực sự đã đọc, thiết kế mẫu/tiêu chí UX, QA evidence màn hình 1366×768 và 1920×1080, accessibility/keyboard/overflow/loading/empty/errors và performance DataGrid.
+- [ ] Review UI/UX theo ảnh/screen/test thực tế, không xác nhận PASS chỉ vì typecheck và build thành công.
+
 ## Milestone 1 — Foundation native Windows (Issue triển khai riêng sau gate)
 **Deliverables:** Tauri 2, React/Vite/TS/Fluent UI v9, Rust business service via Tauri commands, SQLite migrations, local operator 1 record (SALES|SUP|ASM), navigation + empty state + settings.
 **Tasks**
