@@ -86,7 +86,7 @@ export default function MasterDataContent({ pageId, view }: { pageId: Page; view
   const nppNeeded = ['SKU_ALIAS','EMPLOYEE_ALIAS','NPP_STAFF','ROUTE_STAFF'].includes(linkKind);
   return <div className="master-workspace">
     <div className="master-summary"><h2>{pageId === 'sku' ? 'Sản phẩm và mã hàng (SKU)' : pageId === 'team' ? 'Nhân sự và phân cấp' : 'Danh mục nhà phân phối'}</h2>
-      <p>Danh mục được lưu trên máy. Mã hàng và mã nhân viên của từng NPP phải được kiểm tra trước khi sử dụng; ứng dụng không tự chọn thay.</p></div>
+      <p>Danh mục được lưu trên máy. Chưa xác định được mã hàng hoặc nhân viên trong tệp NPP thì không tự chọn thay; cần kiểm tra mã trước khi sử dụng.</p></div>
     {loading ? <p role="status">Đang tải dữ liệu…</p> : null}
     {error ? <p role="alert" className="master-error">{error}</p> : null}
     {notice ? <p role="status" className="master-success">{notice}</p> : null}
