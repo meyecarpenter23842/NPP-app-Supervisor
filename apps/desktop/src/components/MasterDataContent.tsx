@@ -86,7 +86,7 @@ export default function MasterDataContent({ pageId, view }: { pageId: Page; view
   const nppNeeded = ['SKU_ALIAS','EMPLOYEE_ALIAS','NPP_STAFF','ROUTE_STAFF'].includes(linkKind);
   return <div className="master-workspace">
     <div className="master-summary"><h2>{pageId === 'sku' ? 'Danh mục sản phẩm → SKU' : pageId === 'team' ? 'Nhân sự và phân cấp' : 'Danh mục nhà phân phối'}</h2>
-      <p>Dữ liệu được lưu trên máy. Lịch sử không bị thay đổi khi cập nhật quan hệ mới.</p></div>
+      <p>Danh mục được lưu trên máy. Khi chưa có mã nguồn Excel được đối chiếu theo NPP, ứng dụng không tự gán nhân viên, sản phẩm hoặc doanh số; mọi quan hệ phải được xác nhận theo ngày hiệu lực.</p></div>
     {loading ? <p role="status">Đang tải dữ liệu…</p> : null}
     {error ? <p role="alert" className="master-error">{error}</p> : null}
     {notice ? <p role="status" className="master-success">{notice}</p> : null}
