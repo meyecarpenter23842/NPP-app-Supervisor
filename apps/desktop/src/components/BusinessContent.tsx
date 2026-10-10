@@ -1,6 +1,7 @@
 import { Badge, Button, Text } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 import type { PageId } from './pageModel';
+import MasterDataContent from './MasterDataContent';
 
 interface Props { pageId: PageId; view: string; onGoToImport: () => void }
 
@@ -228,10 +229,10 @@ export default function BusinessContent({ pageId, view, onGoToImport }: Props) {
     case 'sales-in': return <SalesIn view={view} />;
     case 'sales-out': return <SalesOut view={view} />;
     case 'inventory': return <Inventory view={view} />;
-    case 'distributors': return <Distributors view={view} />;
-    case 'team': return <Team view={view} />;
+    case 'distributors': return <MasterDataContent key={view} pageId="distributors" view={view} />;
+    case 'team': return <MasterDataContent key={view} pageId="team" view={view} />;
     case 'targets': return <Targets view={view} />;
-    case 'sku': return <Sku view={view} />;
+    case 'sku': return view === 'Danh mục sản phẩm' ? <MasterDataContent key={view} pageId="sku" view={view} /> : <Sku view={view} />;
     case 'reports': return <Reports view={view} />;
   }
 }
