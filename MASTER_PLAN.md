@@ -7,6 +7,7 @@
 - Thứ tự phát triển: audit GitHub → đề xuất/chốt Master Plan → owner duyệt → mới tạo các Issue lập trình → branch từ main mới nhất → code/test/commit/push → PR → review + required CI xanh → owner duyệt merge → merge → owner tự pull --ff-only về local.
 - **Không code trực tiếp ở F:\1_A_Disk_D\Tool\NPP-Sup**. GitHub là nguồn chuẩn; local là nguồn cài/chạy/build-phát hành từ bản đã merge. Không force-push, không tự merge/deploy/migrate production.
 - NPP-Platform (binhnxwjfjxm/NPP-Platform) chỉ là nguồn tham khảo nghiệp vụ; không đưa các backend của NPP vào app này và không sửa NPP-Platform.
+- **Repo tham khảo ưu tiên khi thiết kế M2/M3:** [binhnxwjfjxm/NPP-Platform](https://github.com/binhnxwjfjxm/NPP-Platform) là ERP phục vụ vận hành NPP mà owner cho biết đã xây dựng và chạy khá ổn. Trước khi chốt mô hình mới, kiểm tra những cấu trúc/nghiệp vụ đã có (đặc biệt sản phẩm cha → SKU/biến thể → đơn vị/quy đổi, nhân sự, dữ liệu doanh số). Ghi chú, tệp đã kiểm tra và ranh giới tái sử dụng: [docs/NPP_PLATFORM_REFERENCE.md](docs/NPP_PLATFORM_REFERENCE.md). App Supervisor phục vụ một local operator SALES/SUP/ASM quản lý và phân tích **nhiều NPP**, không phải ERP vận hành NPP, không dùng backend/DB hoặc cơ chế nhiều tài khoản của NPP-Platform. Mọi áp dụng cụ thể cần đối chiếu Excel thực tế và owner duyệt thiết kế M2 trước khi code.
 
 ## 1. Sản phẩm & ranh giới một người sử dụng
 - Ứng dụng Windows Desktop offline-first, lấy Excel/CSV làm nguồn đầu vào. Quản lý NPP, SKU, tuyến, nhân sự kinh doanh, Sales In/Out, XNT, chỉ tiêu và phân tích.
