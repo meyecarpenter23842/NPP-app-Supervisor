@@ -1,6 +1,6 @@
 # MASTER PLAN — Sales SUP/ASM Desktop (FMCG)
-**Trạng thái:** PROPOSED / OWNER REVIEW — chỉ áp dụng chính thức sau PR review, CI PASS và owner duyệt merge.
-**Ngày:** 2026-10-10 | **Repository:** meyecarpenter23842/NPP-app-Supervisor | **Mốc main đã audit:** 54def7f5ecc71305aeb67408562e01520df66e71
+**Trạng thái:** Architecture baseline đã được owner duyệt và merge tại PR #1; hợp đồng M0 bổ sung vẫn ở trạng thái review, chưa cho phép code/release.
+**Ngày:** 2026-10-10 | **Repository:** meyecarpenter23842/NPP-app-Supervisor | **Mốc main đã audit:** 77b5f7054c55721140a8c481930ab5cc0399e2be (PR #1 merged)
 
 ## 0. Quyền ưu tiên & phạm vi quyết định
 - Master Plan này là quyết định nguồn ưu tiên cao nhất cho thiết kế ứng dụng SUP/ASM. docs/MVP_SPEC.md và database/001_initial_schema.sql là baseline hiện hữu, **chưa được coi là đã cập nhật** để đáp ứng mọi quyết định ở đây.
@@ -77,7 +77,7 @@ Ví dụ operator ASM quản lý SUP A → SALES A1, A2 và SUP B → SALES B1; 
 Repo tham khảo: meyecarpenter23842/key-manager (main tại 97c1617ab8a6d5217acd695cb824f7f6d78dbb4e khi audit).
 - Key Manager Admin là app Tauri; Admin API/License API hoạt động online riêng. Offline entitlement ký Ed25519 nằm trong docs/offline-license-v1.md: client chỉ nhúng public key, kiểm signature, app/license/device binding và offline_valid_until.
 - Local app chỉ cần client License API và local signed entitlement; không mang PostgreSQL URL, Key Manager Admin API token, secret R2 hoặc private signing key vào app.
-- Online activation/refresh định kỳ, offline grace có giới hạn do Key Manager quyết định. Khi grace hết, cần online revalidate; “offline-first” **không đồng nghĩa** license vĩnh viễn dùng vô hạn không mạng.
+- **Owner chốt 2026-10-10:** Key Manager là nguồn chính sách duy nhất: key ngày/vĩnh viễn, hết hạn, giới hạn thiết bị, thu hồi và offline grace theo entitlement/config thực tế; Supervisor không hardcode số ngày, số thiết bị hay tự xây chính sách license. Khi grace hết cần online revalidate; không xóa SQLite/backup.
 - Định danh người mua/license KHÁC với nhân viên sales được quản lý; activation không tạo user nội bộ. Quy định rõ các trạng thái license, retry, clock rollback, revoked/offline expiry; không xóa dữ liệu khi license không hợp lệ.
 - Cần audit contract Public License API thực tế, app_code, device binding, grace, key rotation trong Issue tích hợp trước khi code; không khẳng định đã chạy end-to-end.
 
@@ -105,15 +105,15 @@ Chi tiết milestone/checklist/acceptance trong docs/IMPLEMENTATION_PLAN.md.
 - S5: Windows E2E real import/update/restore/offline QA + owner release acceptance.
 - P1 chỉ sau MVP: forecast cảnh báo nâng cao, outlet coverage sâu, coaching, API NPP integration (nếu có yêu cầu riêng).
 
-## 12. Decision register cần owner chốt trước Issue code
-1. Phạm vi thiết bị/mỗi license, offline grace policy do Key Manager quản lý và thời điểm kích hoạt bắt buộc online.
-2. Cấu hình bucket/prefix R2, app_code, định dạng release manifest và cơ chế ký update, build staging strategy.
-3. File Excel thật (ẩn dữ liệu nhạy cảm) cho các mẫu Sales In/Out/XNT/nhân sự để chốt mapping và nguồn ghi nhận.
-4. Nghiệp vụ operator SALES xem dữ liệu bản thân ra sao nếu file Excel chưa có mã nhân viên; quy tắc unmapped.
-5. Có cần giao diện thay đổi manager assignment thủ công khi file nguồn thiếu/đổi lịch sử không (đề xuất có, kèm audit).
-Chưa chốt các mục trên thì Issue liên quan giữ BLOCKED; không tự suy diễn hoặc mở rộng yêu cầu.
+## 12. Decision register M0 (chi tiết trong docs/M0_CONTRACTS.md)
+- **ĐÃ CHỐT:** kiến trúc offline, một operator SALES/SUP/ASM; roadmap M0–M5 và Sprint 1 M1.1–M1.4.
+- **ĐÃ CHỐT baseline (được chỉnh sau khi kiểm chứng dữ liệu):** định nghĩa Sales In/Out/XNT/KPI, nhân sự lịch sử, dữ liệu chưa gán; Excel/CSV mapping linh hoạt theo NPP và data kind.
+- **ĐÃ CHỐT license policy:** Key Manager là nguồn chính sách; Supervisor chỉ tiêu thụ Public License API/signed offline entitlement, không hardcode hạn/số máy/grace.
+- **OWNER CUNG CẤP:** ứng dụng Key Manager `SALESCENTER`, bucket R2 `sales-center`, public base URL `https://pub-6c5811b7ea194f4e88278cbda2c050b0.r2.dev`; chưa xác minh profile đã lưu hoặc endpoint live.
+- **M0 CHƯA XÁC MINH:** mapping Excel thực tế; license environment/app_id/signing public keys; prefix/config R2 đã lưu; Tauri updater manifest/signature, release output/build command và thử nghiệm end-to-end. Các hạng mục này vẫn là gate cho Issue phụ thuộc; không đánh dấu DONE chỉ bằng PR tài liệu.
+- **Không code app, tạo implementation Issue, merge hoặc publish R2** trước các phê duyệt tương ứng.
 
 ## 13. Trạng thái xác minh (2026-10-10)
-- ĐÃ XÁC MINH: repo Supervisor main 54def7f, SQLite schema và DTO hiện thiếu SALES/singleton/hierarchy, repo chưa có PR/Issue, Key Manager có external publish R2 và signed offline entitlement contract.
-- CHƯA XÁC MINH: app SUP/ASM chạy thực tế (chưa xây), Key Manager profile cho app SUP/ASM, R2 credentials/bucket, release manifest thực tế của app này, production readiness, installer và CI toàn bộ Windows.
+- ĐÃ XÁC MINH: PR #1 merged tại 77b5f705; SQL/TS baseline thiếu SALES/singleton/hierarchy; Key Manager main 97c1617 hỗ trợ Public License API và external R2 publish (chưa chứng minh tương thích Tauri updater).
+- CHƯA XÁC MINH: Supervisor executable/CI Windows, license API môi trường thực, Key Manager release profile đã lưu, quyền R2/upload/download, manifest+signing updater, installer và release readiness. Bucket/base URL do owner cung cấp, chưa test.
 - KHÔNG THỰC HIỆN TRONG PR KẾ HOẠCH: mutation DB khách hàng, build production, phát hành R2, merge main, chỉnh file local.

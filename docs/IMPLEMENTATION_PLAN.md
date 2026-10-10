@@ -1,21 +1,34 @@
-# KẾ HOẠCH THỰC THI — Sales SUP/ASM Desktop (DRAFT FOR OWNER REVIEW)
-**Liên kết:** MASTER_PLAN.md | **Giai đoạn:** PLANNING; chưa cấp phép bắt đầu lập trình.
+# KẾ HOẠCH THỰC THI — Sales SUP/ASM Desktop (M0 CONTRACT REVIEW)
+**Liên kết:** MASTER_PLAN.md · docs/M0_CONTRACTS.md · Issue #2 | **Giai đoạn:** M0 planning; Master Plan PR #1 đã merged, chưa cấp phép bắt đầu lập trình.
 **Nguyên tắc:** Mỗi implementation Issue mở sau khi Master Plan PR được owner review/chốt; owner duyệt merge từng PR; GitHub main là nguồn chuẩn; local chỉ pull sau merge.
 
 ## Milestone 0 — Approve architecture (documentation-only)
 **Đầu vào:** Repo main hiện hữu, docs/MVP_SPEC.md, SQL+contracts hiện hữu, KM repo & tài liệu license/release.
 **Tasks**
-- [ ] So sánh nguồn hiện hữu với Master Plan: operator role SALES/SUP/ASM, singleton, nhân viên chỉ là master data, lịch sử tổ chức; chốt field mapping và nguồn KPI.
-- [ ] Chốt license app_code/device/offline grace, R2 release manifest/update signature, staging build không mutate bản main local.
-- [ ] Chốt phạm vi MVP: không backend online, không login cho nhân viên cấp dưới, không đồng bộ nhiều máy.
-- [ ] Review PR Master Plan và required CI xanh; owner duyệt merge; owner kéo main về local khi cần.
-**Gate:** Master Plan đã được owner duyệt và merge + acceptance/KPI definitions thống nhất. Không tạo Issue code trước gate.
+- [x] Audit baseline SQL/TS và thống nhất kiến trúc một operator SALES/SUP/ASM; business rules và mapping Excel linh hoạt được owner duyệt làm baseline, mapping file thật chưa xác minh.
+- [x] Chốt chính sách license: Key Manager quyết định hạn ngày/vĩnh viễn/số thiết bị/grace, Supervisor không hardcode; owner cung cấp SALESCENTER + R2 bucket/base URL.
+- [ ] Verify license app_id/API/kid/clock, R2 prefix/profile và updater manifest/signature/pipeline từ staging; không nhầm owner-provided với e2e PASS.
+- [x] Chốt phạm vi MVP: không backend online, không login cho nhân viên cấp dưới, không đồng bộ nhiều máy.
+- [x] Master Plan PR #1 đã review, CI xanh, owner duyệt merge; main SHA 77b5f705. Owner tự đồng bộ local sau merge khi cần.
+**Gate:** Master Plan đã merge và cấu trúc M0–M5/M1.1–M1.4 đã được owner đồng ý. M0 được khóa **về mặt thiết kế/tài liệu** sau PR docs review + CI PASS + owner duyệt merge và xác nhận cho phép mở Issue Sprint 1. File Excel thật là gate trước M2/M3; kiểm runtime License/R2/NSIS/updater là gate M4/M5 **sau khi có ứng dụng**, không là điều kiện bất khả thi chặn M1. Chưa tạo Issue code trước owner gate.
 
 ### Bắt buộc UI/UX Skill Gate trước mọi Issue giao diện
 - [ ] Liệt kê và đọc các GPT skills khả dụng trước khi tạo/sửa UI, nhất là `professional-ui-design` và `professional-frontend-qa` nếu có. Nếu thiếu thì ghi rõ, dùng checklist manual tương đương; **không nhận đã dùng khi chưa đọc**.
 - [ ] Khi thích hợp đọc `build-dashboard`, `visualize-data`, `react-best-practices` (nếu khả dụng) để kiểm KPI/dashboard, trực quan hóa và chất lượng React; vẫn giữ Fluent UI 9 đã thống nhất.
 - [ ] Trong PR nêu skill thực sự đã đọc, thiết kế mẫu/tiêu chí UX, QA evidence màn hình 1366×768 và 1920×1080, accessibility/keyboard/overflow/loading/empty/errors và performance DataGrid.
 - [ ] Review UI/UX theo ảnh/screen/test thực tế, không xác nhận PASS chỉ vì typecheck và build thành công.
+
+### Sprint 1 đã thống nhất cấu trúc (chưa giao agent code)
+- **M1.1:** Tauri 2 / React / Fluent UI 9 workspace + typed front-end foundation + CI frontend/Rust.
+- **M1.2:** SQLite app-data, migration/rollback preflight, WAL/foreign keys, singleton operator SALES|SUP|ASM; DB tồn tại sau restart.
+- **M1.3:** Typed allowlisted Tauri IPC, onboarding một operator, Windows Office shell, lỗi/empty/loading và UI skill/QA gate.
+- **M1.4:** Windows NSIS installer + smoke clean install/offline/restart/uninstall dữ liệu không mất; build CI xanh trước merge.
+- Mỗi phần được tách Issue sau M0, có acceptance, regressions và Windows QA. KHÔNG mở các Issue này trong PR tài liệu.
+
+### Contract cho M4 — dẫn chiếu
+- Áp dụng `docs/M0_CONTRACTS.md` làm decision register; phân biệt `OWNER-CONFIRMED`, `REPO-VERIFIED`, `PROPOSED`, `UNVERIFIED`.
+- Key Manager release profile chỉ được cấu hình cho staging từ merged SHA. `pnpm run release:package`, `dist\windows-release`, `latest.json` và chữ ký là hợp đồng target/chưa triển khai, không khẳng định output đã tồn tại.
+- Việc kiểm chứng manifest Tauri 2 + installer/.sig và nguyên tắc không mất SQLite là release gate. PR docs/CI baseline PASS **không tương đương** updater E2E PASS.
 
 ## Milestone 1 — Foundation native Windows (Issue triển khai riêng sau gate)
 **Deliverables:** Tauri 2, React/Vite/TS/Fluent UI v9, Rust business service via Tauri commands, SQLite migrations, local operator 1 record (SALES|SUP|ASM), navigation + empty state + settings.
