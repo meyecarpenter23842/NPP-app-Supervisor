@@ -1,0 +1,32 @@
+name: Plan and SQLite baseline
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  plan-and-sqlite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check required planning files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for f in ["MASTER_PLAN.md", "docs/MVP_SPEC.md", "docs/IMPLEMENTATION_PLAN.md", "database/001_initial_schema.sql", "packages/contracts/index.ts"]:
+              assert Path(f).is_file(), f
+          p = Path("MASTER_PLAN.md").read_text(encoding="utf-8")
+          assert "Một" in p or "01 Local Operator" in p
+          assert "Key Manager" in p and "SQLite" in p
+          print("PASS: planning artifacts")
+          PY
+      - name: SQLite baseline smoke test
+        run: python tests/smoke_sqlite.py

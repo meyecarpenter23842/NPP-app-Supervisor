@@ -1,3 +1,5 @@
+> **CHÚ Ý — Thiết kế baseline chưa cập nhật (2026-10-10).** [MASTER_PLAN.md](../MASTER_PLAN.md) là nguồn ưu tiên. Người mua chỉ có **một Local Operator** loại SALES/SUP/ASM; employees và SUP dưới quyền chỉ là dữ liệu kinh doanh, KHÔNG có login. Backend + SQLite hoàn toàn cục bộ theo bản cài; Key Manager License API / R2 chỉ dùng cho license và phát hành bản cập nhật. Bảng Persona, Role TypeScript và app_profiles trong baseline bên dưới chưa phù hợp và phải sửa ở các Issue triển khai sau gate Master Plan. [Kế hoạch thực thi](IMPLEMENTATION_PLAN.md).
+>
 # Sales SUP/ASM Desktop — MVP v1.0
 
 **Trạng thái:** Architecture baseline / handoff for implementation.  
