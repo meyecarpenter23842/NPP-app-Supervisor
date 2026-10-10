@@ -64,11 +64,11 @@ Tauri updater v2 static JSON yêu cầu `version` và cho mỗi platform có `ur
 6. Trước update, checkpoint/backup SQLite nhất quán (online backup hoặc VACUUM INTO), verify integrity/migration compatibility; shutdown kết nối, update binary không đụng user app-data. Lỗi migration/installer phải giữ dữ liệu và phương án rollback; tuyệt đối không chạy binary cũ lên DB schema không tương thích.
 7. Test trên Windows: clean install, offline startup, signed check/download/install, restart, N→N+1 cùng SQLite, DB checksum/record count và restore failure. `READY`/CI docs PASS không thay thế Windows smoke.
 
-## 6. Những việc vẫn BLOCKED / điều kiện để kết thúc M0
-- **Excel thực tế:** cần mẫu đã ẩn dữ liệu nhạy cảm để xác minh sheet, cột, ngày ghi nhận, chứng từ, employee alias, target/XNT. Baseline đã chốt nhưng mapping nguồn chưa PASS; chỉ block Issue phụ thuộc M2/M3 nếu owner cho phép M1 độc lập.
-- **License runtime:** xác minh Key Manager `SALESCENTER` app_code/app_id, API URL, offline signer/key ring, error flows mà không ghi secrets vào chat. Key policy đã khóa, không phải hỏi lại grace số ngày.
-- **Release runtime:** xác minh saved profile/bucket/prefix và quyền r2.dev, staging path thật, build command/artifact output, updater key pair/public key, .sig/manifest, NSIS/CI & smoke. Chưa có Supervisor app nên chưa thể PASS.
-- **Owner gate:** review PR tài liệu, CI baseline xanh rồi quyết định merge. M0 chỉ đánh dấu hoàn thành các điều kiện đã có bằng chứng; **không tạo Issue code hoặc publish khi chưa có yêu cầu rõ**.
+## 6. Những việc vẫn UNVERIFIED / gate theo milestone (không khóa vòng lặp)
+- **Excel thực tế — gate M2/M3:** cần mẫu đã ẩn dữ liệu nhạy cảm để xác minh sheet, cột, ngày ghi nhận, chứng từ, employee alias, target/XNT. Baseline đã chốt; mapping nguồn chưa PASS, **không chặn M1**.
+- **License runtime — gate M4:** xác minh Key Manager `SALESCENTER` app_code/app_id, API URL, offline signer/key ring, error flows mà không ghi secrets vào chat. Key policy đã khóa, không phải hỏi lại grace số ngày.
+- **Release runtime — gate M4/M5:** xác minh saved profile/bucket/prefix và quyền R2, staging path thật, build command/artifact output, updater public key, .sig/manifest, NSIS/CI và smoke. Chưa có Supervisor app nên chưa thể PASS; **không đặt runtime E2E làm điều kiện trước khi bắt đầu M1**.
+- **M0 design gate:** review PR tài liệu, CI baseline xanh, owner duyệt merge rồi owner **xác nhận M0 docs/contract đã đủ để mở Sprint 1**. Test runtime để tại M4/M5 và Excel thực tế tại M2/M3; không tự coi các phần này đã PASS. **Không mở Issue code, merge hoặc publish R2 nếu owner chưa cho phép rõ**.
 
 ## 7. Source/evidence
 - Supervisor main baseline `77b5f7054c55721140a8c481930ab5cc0399e2be`; Issue #2 owner decisions (2026-10-10).

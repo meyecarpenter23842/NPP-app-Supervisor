@@ -10,7 +10,7 @@
 - [ ] Verify license app_id/API/kid/clock, R2 prefix/profile và updater manifest/signature/pipeline từ staging; không nhầm owner-provided với e2e PASS.
 - [x] Chốt phạm vi MVP: không backend online, không login cho nhân viên cấp dưới, không đồng bộ nhiều máy.
 - [x] Master Plan PR #1 đã review, CI xanh, owner duyệt merge; main SHA 77b5f705. Owner tự đồng bộ local sau merge khi cần.
-**Gate:** Master Plan đã merge, owner đã duyệt cấu trúc M0–M5 và Sprint 1 M1.1–M1.4. **Chưa khóa M0** cho tới khi các mục BLOCKED của docs/M0_CONTRACTS.md được xử lý hoặc owner phê duyệt tách phụ thuộc bằng văn bản. Không tạo Issue code trước gate.
+**Gate:** Master Plan đã merge và cấu trúc M0–M5/M1.1–M1.4 đã được owner đồng ý. M0 được khóa **về mặt thiết kế/tài liệu** sau PR docs review + CI PASS + owner duyệt merge và xác nhận cho phép mở Issue Sprint 1. File Excel thật là gate trước M2/M3; kiểm runtime License/R2/NSIS/updater là gate M4/M5 **sau khi có ứng dụng**, không là điều kiện bất khả thi chặn M1. Chưa tạo Issue code trước owner gate.
 
 ### Bắt buộc UI/UX Skill Gate trước mọi Issue giao diện
 - [ ] Liệt kê và đọc các GPT skills khả dụng trước khi tạo/sửa UI, nhất là `professional-ui-design` và `professional-frontend-qa` nếu có. Nếu thiếu thì ghi rõ, dùng checklist manual tương đương; **không nhận đã dùng khi chưa đọc**.
@@ -27,7 +27,7 @@
 
 ### Contract cho M4 — dẫn chiếu
 - Áp dụng `docs/M0_CONTRACTS.md` làm decision register; phân biệt `OWNER-CONFIRMED`, `REPO-VERIFIED`, `PROPOSED`, `UNVERIFIED`.
-- Key Manager release profile chỉ được cấu hình cho staging từ merged SHA. `pnpm run release:package`, `dist\\windows-release`, `latest.json` và chữ ký là hợp đồng target/chưa triển khai, không khẳng định output đã tồn tại.
+- Key Manager release profile chỉ được cấu hình cho staging từ merged SHA. `pnpm run release:package`, `dist\windows-release`, `latest.json` và chữ ký là hợp đồng target/chưa triển khai, không khẳng định output đã tồn tại.
 - Việc kiểm chứng manifest Tauri 2 + installer/.sig và nguyên tắc không mất SQLite là release gate. PR docs/CI baseline PASS **không tương đương** updater E2E PASS.
 
 ## Milestone 1 — Foundation native Windows (Issue triển khai riêng sau gate)
