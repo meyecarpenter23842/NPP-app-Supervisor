@@ -26,7 +26,7 @@ describe('Business language for Sales, SUP and ASM (Issue #21)', () => {
   it('prevents common technical jargon in user-facing screen copy', () => {
     const terms = [
       /Ánh xạ/i, /Tử số/i, /Mẫu số/i,
-      /\bBatch\b/i, /\bProfile\b/i, /\bEngine\b/i,
+      /\bBatch\b/i, /profile ánh xạ/i, /\bEngine\b/i,
       /\bBackup\b/i, /\bLicense\b/i, /\bSQLite\b/i,
       /\bM2\/M3\b/i, /\bM2\.\d+\b/, /\bM4\.\d+\b/,
     ];

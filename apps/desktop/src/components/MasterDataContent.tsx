@@ -136,7 +136,7 @@ export default function MasterDataContent({ pageId, view }: { pageId: Page; view
         </form>
         <div className="master-scroll"><table className="master-table"><thead><tr><th>Loại</th><th>Đối tượng</th><th>Người quản lý / NPP</th><th>Mã NPP / Đơn vị tính</th><th>Thời gian áp dụng</th></tr></thead><tbody>
           {history.map((entry) => <tr key={entry.id}><td>{captions[entry.kind]}</td><td>{labelFor(entry.subjectId)}</td>
-            <td>{labelFor(entry.relatedId ?? entry.distributorId)}</td><td>{entry.externalCode ?? entry.unitCode ?? '—'}{entry.ratioNum ? ' · ' + entry.ratioNum + '/' + entry.ratioDen : ''}</td>
+            <td>{labelFor(entry.relatedId ?? entry.distributorId)}</td><td>{entry.externalCode ?? entry.unitCode ?? '—'}{entry.ratioNum && entry.ratioDen && entry.unitCode ? ' · ' + entry.ratioDen + ' ' + entry.unitCode + ' = ' + entry.ratioNum + ' ' + (data.skus.find((item) => item.id === entry.subjectId)?.detail ?? 'đơn vị cơ sở') : ''}</td>
             <td>{entry.effectiveFrom ?? '—'} → {entry.effectiveTo ?? 'Đang áp dụng'}</td></tr>)}
           {history.length === 0 ? <tr><td colSpan={5}>Chưa có mã NPP hoặc phân công nào.</td></tr> : null}
         </tbody></table></div>
