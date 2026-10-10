@@ -136,39 +136,6 @@ function Inventory({ view }: { view: string }) {
   </>;
 }
 
-function Distributors({ view }: { view: string }) {
-  if (view === 'Hồ sơ') return <>
-    <SectionHeader title="Hồ sơ nhà phân phối" description="Chọn NPP trong danh sách sau khi danh mục được triển khai để xem thông tin chi tiết." />
-    <div className="detail-grid"><div className="content-panel panel-pad"><h2>Thông tin chính</h2><div className="details-skeleton"><span>Mã NPP <b>Chưa chọn</b></span><span>Tên nhà phân phối <b>—</b></span><span>Địa bàn <b>—</b></span><span>Trạng thái <b>—</b></span></div></div><div className="content-panel panel-pad"><h2>Liên kết nghiệp vụ</h2><p>Thông tin tuyến, nhân viên và SKU sẽ hiển thị sau khi có danh mục.</p><ComingSoon feature="Quản lý hồ sơ NPP" /></div></div>
-  </>;
-  if (view === 'Tuyến bán hàng') return <>
-    <SectionHeader title="Phạm vi tuyến bán hàng" description="Tuyến/địa bàn được gắn theo NPP và nhân viên có hiệu lực." />
-    <DataTable label="tuyến bán hàng" columns={['Mã tuyến', 'Tên tuyến', 'Nhà phân phối', 'Nhân viên phụ trách', 'Hiệu lực từ', 'Hiệu lực đến']} />
-  </>;
-  return <>
-    <SectionHeader title="Danh mục nhà phân phối" description="Nơi quản lý các NPP và phạm vi kinh doanh trên máy." />
-    <div className="detail-grid"><div className="content-panel"><DataTable label="nhà phân phối" columns={['Mã NPP', 'Tên nhà phân phối', 'Khu vực', 'Trạng thái']} /></div><div className="content-panel panel-pad"><h2>Chi tiết NPP</h2><div className="empty-detail"><span aria-hidden="true">▤</span><p>Chưa có nhà phân phối được chọn.</p><small>Nhập danh mục ở giai đoạn M2 để xem thông tin.</small></div></div></div>
-  </>;
-}
-
-function Team({ view }: { view: string }) {
-  if (view === 'Cây quản lý') return <>
-    <SectionHeader title="Cơ cấu cấp quản lý" description="Minh họa các cấp nghiệp vụ, không phải cây nhân sự thực tế." />
-    <div className="org-levels"><div><strong>ASM</strong><span>Quản lý vùng</span></div><span aria-hidden="true">→</span><div><strong>SUP</strong><span>Giám sát bán hàng</span></div><span aria-hidden="true">→</span><div><strong>SALES</strong><span>Nhân viên kinh doanh</span></div></div>
-    <div className="panel-pad empty-panel"><h3>Chưa có nhân sự để xây dựng cây quản lý</h3><p>Quan hệ báo cáo sẽ được tính theo ngày hiệu lực, không áp sơ đồ hiện tại lên quá khứ.</p></div>
-  </>;
-  if (view === 'Lịch sử phân công') return <>
-    <SectionHeader title="Lịch sử phân công và quản lý" description="Theo dõi người quản lý, NPP và tuyến theo từng khoảng hiệu lực." />
-    <DataTable label="lịch sử nhân sự" columns={['Nhân viên', 'Vai trò', 'Quản lý trực tiếp', 'NPP / Tuyến', 'Từ ngày', 'Đến ngày']} />
-  </>;
-  return <>
-    <SectionHeader title="Danh sách đội ngũ" description="Quản lý thông tin nhân sự để gắn doanh số và tuyến — không cấp tài khoản đăng nhập." />
-    <div className="role-legend"><span>ASM · Quản lý vùng</span><span>SUP · Giám sát</span><span>SALES · Nhân viên</span></div>
-    <DataTable label="nhân viên kinh doanh" columns={['Mã NVKD', 'Họ tên', 'Vai trò', 'Người quản lý', 'NPP', 'Hiệu lực']} />
-    <Notice title="Ứng dụng một người sử dụng">Nhân viên cấp dưới chỉ là dữ liệu quản lý doanh số, không phải tài khoản trong app.</Notice>
-  </>;
-}
-
 function Targets({ view }: { view: string }) {
   const cols: Record<string, ColumnSet> = {
     'Chỉ tiêu': ['Kỳ tháng', 'Cấp giao', 'Đối tượng', 'Chỉ tiêu (VND)', 'Nguồn', 'Trạng thái'],
