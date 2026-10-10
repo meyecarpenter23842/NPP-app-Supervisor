@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -41,12 +44,22 @@ jobs:
       - run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check
       - run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
-      - name: Windows executable without installer
-        run: npm run tauri -- build --no-bundle
+      - name: NSIS configuration/version contract
+        run: python tests/check_installer_versions.py
+      - name: Build NSIS installer with embedded offline WebView2 runtime
+        run: npm run tauri -- build --bundles nsis
         working-directory: apps/desktop
-      - name: Verify executable
+      - name: Native install/restart/uninstall/reinstall persistence smoke
         shell: pwsh
         run: |
-          if (-not (Test-Path "apps/desktop/src-tauri/target/release/sales-supervisor.exe")) {
-            throw "Windows desktop executable not found"
-          }
+          ./tests/windows_installer_smoke.ps1 -InstallerDir "apps/desktop/src-tauri/target/release/bundle/nsis" -EvidenceDir "artifacts/windows-installer"
+      - name: Preserve NSIS artifact and SHA provenance
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: supervisor-nsis-${{ github.sha }}
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+            artifacts/windows-installer/*.json
+          if-no-files-found: error
+          retention-days: 7
