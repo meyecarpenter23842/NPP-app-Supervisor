@@ -88,7 +88,10 @@ impl AppDatabase {
         if display_name.is_empty() {
             return Err("operator name must not be blank".into());
         }
-        let conn = self.connection.lock().map_err(|_| "storage mutex poisoned")?;
+        let conn = self
+            .connection
+            .lock()
+            .map_err(|_| "storage mutex poisoned")?;
         let changed = conn.execute(
             "UPDATE local_operator SET display_name=?1,role=?2 WHERE id=1",
             params![display_name, role.as_str()],
@@ -438,15 +441,23 @@ mod tests {
         assert!(!db.update_operator("No profile", OperatorRole::Sales)?);
         db.create_operator("First", OperatorRole::Sup)?;
         assert!(db.update_operator("  Updated  ", OperatorRole::Asm)?);
-        assert_eq!(db.operator()?, Some(LocalOperator {
-            display_name: "Updated".into(), role: OperatorRole::Asm,
-        }));
+        assert_eq!(
+            db.operator()?,
+            Some(LocalOperator {
+                display_name: "Updated".into(),
+                role: OperatorRole::Asm,
+            })
+        );
         assert!(db.create_operator("Another", OperatorRole::Sales).is_err());
         drop(db);
         let again = AppDatabase::open(root.path())?;
-        assert_eq!(again.operator()?, Some(LocalOperator {
-            display_name: "Updated".into(), role: OperatorRole::Asm,
-        }));
+        assert_eq!(
+            again.operator()?,
+            Some(LocalOperator {
+                display_name: "Updated".into(),
+                role: OperatorRole::Asm,
+            })
+        );
         Ok(())
     }
 
