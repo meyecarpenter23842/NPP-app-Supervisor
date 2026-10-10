@@ -130,7 +130,7 @@ pub fn list_master_data(db: State<'_, AppDatabase>) -> Result<MasterSnapshot, Ma
     .map_err(MasterError::storage)?;
     let families = fetch(
         &conn,
-        "SELECT id,code,name,category,brand,active FROM product_families ORDER BY code",
+        "SELECT id,code,name,category,NULL,active FROM product_families ORDER BY code",
         item,
     )
     .map_err(MasterError::storage)?;
@@ -148,7 +148,7 @@ pub fn list_master_data(db: State<'_, AppDatabase>) -> Result<MasterSnapshot, Ma
     )
     .map_err(MasterError::storage)?;
     let links = fetch(&conn, "
-        SELECT id,'SKU_ALIAS',product_id,NULL,distributor_id,raw_sku_code,raw_unit,conversion_num,conversion_den,effective_from,effective_to FROM sku_aliases
+        SELECT id,'SKU_ALIAS' AS kind,product_id AS subject_id,NULL AS related_id,distributor_id,raw_sku_code AS external_code,raw_unit AS unit_code,conversion_num AS ratio_num,conversion_den AS ratio_den,effective_from,effective_to FROM sku_aliases
         UNION ALL SELECT id,'EMPLOYEE_ALIAS',employee_id,NULL,distributor_id,raw_employee_code,NULL,NULL,NULL,effective_from,effective_to FROM employee_code_aliases
         UNION ALL SELECT id,'MANAGER',employee_id,manager_employee_id,NULL,NULL,NULL,NULL,NULL,effective_from,effective_to FROM employee_hierarchy_assignments
         UNION ALL SELECT id,'NPP_STAFF',employee_id,NULL,distributor_id,NULL,NULL,NULL,NULL,effective_from,effective_to FROM employee_distributor_assignments
