@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import App from './App';
 import Onboarding from './components/Onboarding';
@@ -58,10 +59,37 @@ describe('M1.5 sidebar navigation and business screens', () => {
 
   it('keeps operator editing in settings and marks unrelated M4 capabilities unsupported', () => {
     const src = renderToStaticMarkup(<Workspace operator={operator} onUpdate={async () => {}} />);
-    expect(src).toContain('Bộ lọc sẽ khả dụng khi có dữ liệu');
+    expect(src).toContain('Chưa có dữ liệu để lọc');
+    expect(src).not.toContain('QUẢN LÝ PHÂN PHỐI /');
     expect(src).toContain('role="tablist"');
     expect(src).toContain('role="tabpanel"');
     expect(src).toContain('aria-selected="true"');
     expect(src).toContain('disabled=""');
+  });
+});
+
+
+describe('M1.6 compact desktop visual contract', () => {
+  const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+
+  it('separates dark sidebar from the light workspace and keeps keyboard focus visible', () => {
+    expect(styles).toMatch(/\.sidebar\s*\{[^}]*background:\s*var\(--sidebar-bg\)/);
+    expect(styles).toMatch(/\.nav-item\.selected\s*\{[^}]*background:\s*#e6f2fc/);
+    expect(styles).toMatch(/\.nav-item:focus-visible\s*\{[^}]*outline:\s*2px/);
+  });
+
+  it('keeps the header and period/NPP filters compact with a narrow-window fallback', () => {
+    expect(styles).toMatch(/\.page-header\s*\{[^}]*margin-bottom:\s*11px/);
+    expect(styles).toMatch(/\.page-toolbar\s*\{[^}]*flex-wrap:\s*nowrap/);
+    expect(styles).toMatch(/\.filter-field\s*\{[^}]*display:\s*flex/);
+    expect(styles).toMatch(/@media\s*\(max-width:\s*540px\)/);
+  });
+
+  it('preserves actual missing-data and unsupported messages without fictional data', () => {
+    const html = renderToStaticMarkup(<Workspace operator={operator} onUpdate={async () => {}} />);
+    expect(html).toContain('Chưa có dữ liệu để lọc');
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('disabled=""');
+    expect(html).not.toContain('12,4 tỷ');
   });
 });
