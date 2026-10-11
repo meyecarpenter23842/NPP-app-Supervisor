@@ -134,8 +134,7 @@ fn attr(tag: &BytesStart<'_>, key: &str) -> Option<String> {
         .map(|a| a.value.as_ref().to_owned())
 }
 fn text(e: &quick_xml::events::BytesText<'_>) -> Result<String, String> {
-    let raw =
-        e.as_ref();
+    let raw = e.as_ref();
     Ok(quick_xml::escape::unescape(raw)
         .map_err(|_| err("Excel chứa ký tự không hợp lệ."))?
         .into_owned())
