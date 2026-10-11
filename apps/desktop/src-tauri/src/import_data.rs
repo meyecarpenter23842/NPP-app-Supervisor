@@ -34,7 +34,7 @@ fn conflict(s: &str) -> ImportError {
         message: s.to_owned(),
     }
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportRequest {
     file_name: String,
