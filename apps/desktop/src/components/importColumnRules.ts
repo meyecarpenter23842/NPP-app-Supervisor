@@ -43,7 +43,7 @@ const ALIASES: Record<string, string[]> = {
 };
 
 export function suggestColumns(headers: string[], kind: ImportKind): Record<string, string> {
-  const allowed = new Set(fieldsFor(kind).map(f => f.key));
+  const allowed = new Set<string>(fieldsFor(kind).map(f => f.key));
   const candidate = new Map<string, number[]>();
   headers.forEach((raw, index) => {
     const normalized = cleanHeader(raw);
