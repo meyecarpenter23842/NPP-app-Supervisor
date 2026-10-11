@@ -23,6 +23,7 @@ pub fn run() {
             catalog_import::commit_catalog_import,
             catalog_import::list_catalog_import_history,
             catalog_data::create_catalog_option,
+            catalog_data::create_product_family,
             catalog_data::assign_family_catalog,
             catalog_data::create_price_list,
             catalog_data::create_price_item,
