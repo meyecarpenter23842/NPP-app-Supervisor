@@ -12,7 +12,7 @@ export interface BusinessPage {
 
 export const businessPages: readonly BusinessPage[] = [
   { id: 'dashboard', title: 'Tổng quan', shortTitle: 'Tổng quan', description: 'Theo dõi tình hình kinh doanh và dữ liệu đã nhập.', group: 'TỔNG QUAN', views: ['Tình hình chung', 'Nguồn dữ liệu', 'Cảnh báo'] },
-  { id: 'imports', title: 'Nhập dữ liệu', shortTitle: 'Nhập dữ liệu', description: 'Theo dõi việc nhập tệp Excel/CSV và các dòng cần kiểm tra.', group: 'TỔNG QUAN', views: ['Lần nhập dữ liệu', 'Chọn cột Excel', 'Dòng cần kiểm tra'] },
+  { id: 'imports', title: 'Nhập dữ liệu', shortTitle: 'Nhập dữ liệu', description: 'Nhập Excel/CSV trên một màn hình, xem trước và xác nhận sau kiểm tra.', group: 'TỔNG QUAN', views: ['Nhập Excel', 'Lịch sử nhập'] },
   { id: 'sales-in', title: 'Sales In', shortTitle: 'Sales In', description: 'Doanh số công ty bán vào nhà phân phối theo chứng từ và kỳ.', group: 'KINH DOANH', views: ['Tổng hợp', 'Chứng từ', 'Theo SKU'] },
   { id: 'sales-out', title: 'Sales Out', shortTitle: 'Sales Out', description: 'Hàng nhà phân phối bán ra, đối chiếu nhân viên phụ trách theo ngày bán.', group: 'KINH DOANH', views: ['Tổng hợp', 'Theo nhân viên', 'Chưa xác định nhân viên', 'Chứng từ'] },
   { id: 'inventory', title: 'Xuất nhập tồn', shortTitle: 'Xuất nhập tồn', description: 'Theo dõi tồn đầu, nhập, xuất và chênh lệch tồn cuối của từng kỳ.', group: 'KINH DOANH', views: ['Theo kỳ', 'Kiểm tra chênh lệch', 'Theo SKU'] },

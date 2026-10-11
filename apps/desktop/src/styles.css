@@ -292,3 +292,27 @@ button:disabled { cursor: not-allowed; }
 .import-fixed-field > select, .import-fixed-field > input { min-width: 0; width: 100%; min-height: 34px; padding: 5px 8px; background: white; color: var(--text); border: 1px solid #a8bfce; border-radius: 5px; font-size: 12px; }
 .import-fixed-field > select:focus-visible, .import-fixed-field > input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .import-fixed-field small { color: var(--muted); font-size: 11px; }
+
+/* Single-screen Excel import: one mapping control per source column.
+   File-wide values render only for fields not already mapped from Excel. */
+.import-sheet-controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; margin-bottom: 9px; }
+.import-sheet-controls > label { display: grid; gap: 5px; min-width: 185px; max-width: 285px; flex: 1 1 185px; font-size: 12px; }
+.import-sheet-controls select { width: 100%; max-width: 100%; min-height: 35px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 5px; padding: 5px 8px; }
+.import-sheet-controls select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.import-sheet-controls > p { margin: 0; font-size: 12px; }
+.import-sheet-info { align-self: center; font-size: 11px; color: var(--muted); }
+.import-fixed-settings { padding: 12px 14px; background: var(--surface-soft); }
+.import-fixed-settings > p { margin: 0; }
+.import-fixed-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
+.import-fixed-field > input { background: var(--surface); }
+.import-fixed-generated { min-height: 34px; display: flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--brand-strong); }
+.import-fixed-field .import-inline-checkbox { display: flex; gap: 7px; align-items: start; font-size: 11px; font-weight: 500; color: var(--text); }
+.import-inline-checkbox > input { flex: 0 0 auto; margin: 2px 0 0; accent-color: var(--brand); }
+.import-optional-common { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 9px; }
+.import-optional-common > summary { cursor: pointer; font-size: 12px; color: var(--brand-strong); font-weight: 600; }
+.import-optional-common > .import-fixed-grid { margin-top: 10px; }
+.import-optional-common > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 800px) {
+  .import-sheet-controls { align-items: stretch; }
+  .import-sheet-info { width: 100%; }
+}

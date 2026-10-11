@@ -63,3 +63,15 @@ Owner phản hồi sau PR #27: không phải tệp nào cũng có cột ngày, s
 - Không thay schema sản xuất hay thêm loại nhập master/XNT/KPI/OUTLET chưa hỗ trợ.
 
 QA cần xác minh ở Windows với ví dụ tệp chỉ có `SKU,SL,Thành tiền`, ngày/đơn vị/mã dòng ở UI, và tệp có cột nguồn như trước. Không coi cấu hình cố định bằng chứng thật cho các giao dịch; người dùng phải xác nhận dữ liệu nguồn.
+
+## Issue #30 — Bố cục nhập Excel một màn hình (owner duyệt 2026-10-11)
+
+**Đã chốt phạm vi UI:**
+- Một view Nhập Excel gồm 4 phần tuần tự: 1) NPP/loại Sales In-Out/kỳ/file; 2) bảng Excel với duy nhất một dropdown gán chuẩn ngay trên mỗi cột; 3) trường chưa có cột nguồn thì nhập chung một lần; 4) xem trước lỗi và xác nhận nhập trên cùng màn hình.
+- Bỏ dropdown chọn dòng tiêu đề; lấy hàng đầu tiên có nội dung trong sheet để làm tên cột. Không phát minh cột nguồn và không chọn lại cột từ khung phía dưới. Trang tính chỉ cần chọn khi có hơn một sheet.
+- Các trường đã gán cột Excel không được lặp lại trong vùng giá trị chung. Tùy chọn thông tin khác đặt trong vùng mở rộng, không ép nhập.
+- Số chứng từ chung có lựa chọn minh bạch tạo mã riêng từ dòng nguồn. Đây là mã truy vết, không phải số hóa đơn.
+- Lịch sử nhập là view riêng; không chia ánh xạ và kết quả preview thành nhiều tab.
+- Giữ phạm vi backend Sales In/Out đã có. Không nhận tệp bảng giá (Giá nền, GT01 - Bảng Giá Đại Lý) thành doanh số và không hiển thị giả chức năng import SKU. Import SKU chưa được triển khai trong Issue này.
+- Validation, atomic commit, scoped SKU/employee, conversion, reimport history và audit không đổi.
+- Cần CI xanh và kiểm thử UX thực Windows 1366×768 + dữ liệu Excel thực; chưa được owner yêu cầu merge.

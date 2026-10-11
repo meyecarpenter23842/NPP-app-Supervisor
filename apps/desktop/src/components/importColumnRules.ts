@@ -44,6 +44,11 @@ export function hasSourceFinancialEvidence(columns: Record<string, string>): boo
   return Boolean(columns.quantity || columns.amount);
 }
 
+export function pickHeaderRow<T extends { row: number; values: string[] }>(rows: T[]): T | undefined {
+  // Ignore leading blank Excel rows without asking operators to select header indexes.
+  return rows.find(row => row.values.some(value => value.trim().length > 0));
+}
+
 export function cleanHeader(header: string): string {
   return header.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase()
@@ -82,7 +87,9 @@ export function suggestColumns(headers: string[], kind: ImportKind): Record<stri
 
 export function appearsToBePriceList(headers: string[]): boolean {
   const names = headers.map(cleanHeader);
-  const price = names.some(x => ['don gia', 'gia ban', 'bang gia', 'gia niem yet', 'gia si', 'unit price'].includes(x));
+  // Price sheets often label price columns as "Gia nen" or "GT01 - Bang Gia Dai Ly".
+  const price = names.some(x => ['don gia', 'gia ban', 'bang gia', 'gia niem yet', 'gia si', 'gia nen', 'gia dai ly', 'unit price'].includes(x)
+    || /(?:^| )bang gia(?: |$)/.test(x));
   if (!price) return false;
   const transactional = names.some(x =>
     ['ngay ban', 'ngay giao', 'ngay chung tu', 'so chung tu', 'so hoa don', 'so luong', 'sl ban',
