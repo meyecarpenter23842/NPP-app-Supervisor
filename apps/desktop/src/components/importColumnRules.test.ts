@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appearsToBePriceList, missingFields, suggestColumns } from './importColumnRules';
+import { appearsToBePriceList, hasSourceFinancialEvidence, invalidFixedFields, missingFields, SOURCE_ROW_DOCUMENT, suggestColumns } from './importColumnRules';
 
 describe('Excel standard field selection', () => {
   it('maps two NPP header formats into the same standard fields', () => {
@@ -19,5 +19,25 @@ describe('Excel standard field selection', () => {
   it('recognizes a price-only workbook but not a transactional file with unit price', () => {
     expect(appearsToBePriceList(['SKU', 'Đơn giá', 'Giá bán'])).toBe(true);
     expect(appearsToBePriceList(['SKU', 'Đơn giá', 'Ngày bán', 'Số lượng'])).toBe(false);
+  });
+});
+
+describe('fixed metadata for Excel import', () => {
+  it('accepts explicitly provided date/unit/document for the whole file', () => {
+    const columns = { sku: '@col:0', quantity: '@col:1', amount: '@col:2' };
+    const fixed = { date: '2026-10-01', unit: 'THUNG', document: SOURCE_ROW_DOCUMENT };
+    expect(missingFields('SALES_OUT', columns, fixed)).toEqual([]);
+    expect(invalidFixedFields('SALES_OUT', fixed)).toEqual([]);
+    expect(hasSourceFinancialEvidence(columns)).toBe(true);
+  });
+  it('never treats blank or bad constants as complete, and refuses synthetic sales', () => {
+    expect(missingFields('SALES_IN', { sku:'@col:0' }, { date: '', document:'X' }))
+      .toContain('Ngày bán / ngày chứng từ');
+    expect(invalidFixedFields('SALES_OUT', { date:'2026-02-30', amount:'1,000', quantity:'one' }))
+      .toHaveLength(3);
+    expect(hasSourceFinancialEvidence({ sku:'@col:0' })).toBe(false);
+  });
+  it('keeps source document codes as text without coercion', () => {
+    expect(invalidFixedFields('SALES_IN', { document:'000045', unit:'LON' })).toEqual([]);
   });
 });

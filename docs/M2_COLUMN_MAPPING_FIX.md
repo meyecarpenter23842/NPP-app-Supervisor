@@ -49,3 +49,17 @@ Mẫu chính thức chỉ được chốt khi kiểm tra file thực tế; khôn
 7. React typecheck/test/build, Rust fmt/check/test, installer workflow CI. Windows native 1366×768/1920×1080 và dropdown overflow phải được QA trước merge.
 
 **Không có file Excel thực tế trong GitHub**, các quy tắc nhận dạng hiện tại chỉ là gợi ý bảo thủ; không kết luận mọi định dạng NPP đều chạy đúng trước kiểm tra dữ liệu thật.
+
+## Issue #28 — Giá trị chung theo tệp và mở nút xem trước (2026-10-11)
+
+Owner phản hồi sau PR #27: không phải tệp nào cũng có cột ngày, số chứng từ, đơn vị, số lượng, tiền cho từng dòng. UI cũ khóa “Xem trước” ngay khi thiếu cột, không thể xác nhận những thông tin có giá trị chung.
+
+- Bên cạnh dropdown ngay trên từng cột Excel, mỗi canonical field được chọn **cột nguồn** hoặc **giá trị cố định cho mọi dòng của tệp**; hai nguồn không được đồng thời dùng cho một field.
+- Field `date` có thể đặt ngày chung, `unit` dùng đơn vị chung, `document` khai báo mã chung hoặc mã truy vết nguồn `SRC:<hash>:<sheet>:<row>` được người dùng chọn rõ ràng. Mã SRC không phải số hóa đơn/NPP.
+- `quantity` và `amount` có thể nhận hằng số chỉ khi toàn bộ dòng thực sự tương ứng; bảo vệ tối thiểu: bắt buộc **ít nhất một trong hai** lấy từ cột Excel thật, chặn việc tạo doanh số từ file không có dữ liệu giao dịch.
+- Trường cố định được lưu và khôi phục theo mẫu NPP + loại dữ liệu + cấu trúc header; preview và commit cùng dùng một logic kiểm tra nguồn, không làm giả dữ liệu.
+- Nút xem trước chỉ khóa khi chưa có file hoặc đang xử lý; các lỗi thiếu NPP, kỳ, trường, định dạng số/ngày được hiển thị rõ khi bấm.
+- Cùng hash tệp nhưng mapping/giá trị chung thay đổi phải đi qua revision/supersede; không được coi là duplicate hoàn toàn giống.
+- Không thay schema sản xuất hay thêm loại nhập master/XNT/KPI/OUTLET chưa hỗ trợ.
+
+QA cần xác minh ở Windows với ví dụ tệp chỉ có `SKU,SL,Thành tiền`, ngày/đơn vị/mã dòng ở UI, và tệp có cột nguồn như trước. Không coi cấu hình cố định bằng chứng thật cho các giao dịch; người dùng phải xác nhận dữ liệu nguồn.

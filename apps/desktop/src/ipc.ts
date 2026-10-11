@@ -88,6 +88,7 @@ export interface ImportRequest {
   sheetName: string;
   headerRow: number;
   columns: Record<string, string>;
+  fixedValues?: Record<string, string>;
   rowKind: 'INVOICE' | 'DELIVERED' | 'RETURN';
   positiveValue?: string | null;
   returnValue?: string | null;
@@ -95,6 +96,7 @@ export interface ImportRequest {
 }
 export interface ImportMappingProfile {
   columns: Record<string, string>;
+  fixedValues?: Record<string, string>;
   rowKind: 'INVOICE' | 'DELIVERED' | 'RETURN';
   positiveValue: string | null;
   returnValue: string | null;
