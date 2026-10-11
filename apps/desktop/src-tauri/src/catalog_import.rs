@@ -743,4 +743,68 @@ mod tests {
             "00001"
         );
     }
+    #[test]
+    fn imports_1446_reference_prices_without_touching_sales() {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch(
+            "CREATE TABLE distributors(id TEXT PRIMARY KEY,code TEXT,active INTEGER DEFAULT 1);
+             CREATE TABLE products(id TEXT PRIMARY KEY,sku_code TEXT,active INTEGER DEFAULT 1);
+             CREATE TABLE sku_unit_conversions(id TEXT PRIMARY KEY,product_id TEXT,unit_code TEXT,conversion_num INTEGER,conversion_den INTEGER);
+             CREATE TABLE price_lists(id TEXT PRIMARY KEY,distributor_id TEXT,code TEXT,active INTEGER DEFAULT 1,effective_from TEXT,effective_to TEXT);
+             CREATE TABLE price_list_items(id TEXT PRIMARY KEY,price_list_id TEXT,product_id TEXT,unit_code TEXT,amount_vnd INTEGER,
+                 effective_from TEXT,effective_to TEXT,source_note TEXT,active INTEGER DEFAULT 1);
+             CREATE TABLE audit_events(id TEXT,event_type TEXT,actor_profile_id TEXT,entity_type TEXT,entity_id TEXT,created_at_utc TEXT);
+             CREATE TABLE local_operator(id INTEGER);
+             CREATE TABLE catalog_import_runs(id TEXT,fingerprint TEXT,content_sha256 TEXT,kind TEXT,distributor_id TEXT,price_list_id TEXT,
+                 source_file_name TEXT,source_sheet TEXT,total_rows INTEGER,inserted_rows INTEGER,unchanged_rows INTEGER,created_at_utc TEXT);
+             CREATE TABLE catalog_import_row_events(run_id TEXT,excel_row INTEGER,action TEXT,entity_kind TEXT,entity_id TEXT);
+             INSERT INTO distributors(id,code) VALUES('npp','0001');
+             INSERT INTO price_lists(id,distributor_id,code,effective_from) VALUES('list','npp','L1','2026-01-01');",
+        ).unwrap();
+        let mut csv = String::from("SKU,Don vi,Gia,Ngay\n");
+        for n in 0..1446 {
+            let sku = format!("SKU{n:05}");
+            let id = format!("product{n}");
+            c.execute(
+                "INSERT INTO products(id,sku_code) VALUES(?1,?2)",
+                params![id, sku],
+            ).unwrap();
+            c.execute(
+                "INSERT INTO sku_unit_conversions(id,product_id,unit_code,conversion_num,conversion_den) VALUES(?1,?2,'LON',1,1)",
+                params![format!("unit{n}"), id],
+            ).unwrap();
+            csv.push_str(&format!("{sku},LON,{},2026-10-01\n", 10000 + n));
+        }
+        let req = CatalogBatchRequest {
+            file_name: "bang-gia-1446.csv".into(),
+            bytes: csv.into_bytes(),
+            sheet_name: "CSV".into(),
+            header_row: 1,
+            kind: "PRICE".into(),
+            columns: HashMap::from([
+                ("skuCode".into(), 0),
+                ("unitCode".into(), 1),
+                ("amountVnd".into(), 2),
+                ("from".into(), 3),
+            ]),
+            fixed_values: HashMap::new(),
+            distributor_id: Some("npp".into()),
+            price_list_id: Some("list".into()),
+        };
+        let (preview, _) = run(&c, &req, false, None).unwrap();
+        assert_eq!(preview.total_rows, 1446);
+        assert_eq!(preview.inserted_rows, 1446);
+        assert_eq!(preview.error_rows, 0);
+        let before: i64 = c.query_row("SELECT count(*) FROM price_list_items", [], |r| r.get(0)).unwrap();
+        assert_eq!(before, 0);
+        let (saved, _) = run(&c, &req, true, Some(&preview.fingerprint)).unwrap();
+        assert_eq!(saved.inserted_rows, 1446);
+        let persisted: i64 = c.query_row("SELECT count(*) FROM price_list_items", [], |r| r.get(0)).unwrap();
+        assert_eq!(persisted, 1446);
+        let (again, _) = run(&c, &req, true, Some(&preview.fingerprint)).unwrap();
+        assert!(again.already_imported);
+        let unchanged: i64 = c.query_row("SELECT count(*) FROM price_list_items", [], |r| r.get(0)).unwrap();
+        assert_eq!(unchanged, 1446);
+    }
+
 }
