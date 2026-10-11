@@ -2,6 +2,7 @@ import { Badge, Button, Text } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 import type { PageId } from './pageModel';
 import MasterDataContent from './MasterDataContent';
+import CatalogWorkspace from './CatalogWorkspace';
 import ImportContent from './ImportContent';
 
 interface Props { pageId: PageId; view: string; onGoToImport: () => void }
@@ -132,21 +133,6 @@ function Targets({ view }: { view: string }) {
   </>;
 }
 
-function Sku({ view }: { view: string }) {
-  if (view === 'Xu hướng') return <>
-    <SectionHeader title="Xu hướng SKU theo thời gian" description="Biểu đồ chỉ hiển thị khi có dữ liệu nguồn liên tục, đủ kỳ." />
-    <div className="chart-empty"><span aria-hidden="true" className="chart-placeholder">▥</span><h3>Chưa đủ dữ liệu để vẽ xu hướng</h3><p>Không tạo đồ thị minh họa từ số liệu giả.</p></div>
-  </>;
-  if (view === 'Theo nhà phân phối') return <>
-    <SectionHeader title="Cơ cấu sản phẩm theo NPP" description="So sánh sản phẩm theo đúng đơn vị quy đổi và kỳ dữ liệu." />
-    <DataTable label="SKU theo nhà phân phối" columns={['Nhà phân phối', 'Mã SKU', 'Tên SKU', 'Đơn vị tính', 'Sản lượng', 'Tỷ trọng']} />
-  </>;
-  return <>
-    <SectionHeader title="Hiệu quả sản phẩm" description="Tập trung vào mã hàng, đơn vị chuẩn và đóng góp doanh số." />
-    <div className="content-split"><div className="content-panel"><DataTable label="phân tích SKU" columns={['Mã SKU', 'Tên sản phẩm', 'Đơn vị tính', 'Sản lượng', 'Doanh số (VND)', 'Tỷ trọng']} /></div><div className="content-panel panel-pad"><h2>Thông tin mã hàng</h2><div className="empty-detail"><span aria-hidden="true">▤</span><p>Chưa có sản phẩm để phân tích.</p><small>Cần danh mục SKU và dữ liệu Sales hợp lệ.</small></div></div></div>
-  </>;
-}
-
 const reportKinds = [
   { title: 'Doanh số', detail: 'Sales In / Out theo kỳ và NPP' },
   { title: 'Tồn kho', detail: 'Xuất nhập tồn và chênh lệch' },
@@ -181,7 +167,7 @@ export default function BusinessContent({ pageId, view, onGoToImport }: Props) {
     case 'distributors': return <MasterDataContent key={view} pageId="distributors" view={view} />;
     case 'team': return <MasterDataContent key={view} pageId="team" view={view} />;
     case 'targets': return <Targets view={view} />;
-    case 'sku': return view === 'Danh mục sản phẩm' ? <MasterDataContent key={view} pageId="sku" view={view} /> : <Sku view={view} />;
+    case 'sku': return <CatalogWorkspace view={view} />;
     case 'reports': return <Reports view={view} />;
   }
 }
