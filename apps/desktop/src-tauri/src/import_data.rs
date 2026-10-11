@@ -312,16 +312,18 @@ fn validate_sources(
     };
     if columns.len() + fixed.len() > 16
         || columns.keys().any(|key| !allowed(key.as_str()))
-        || fixed.keys().any(|key| !allowed(key.as_str()) || key == "type")
+        || fixed
+            .keys()
+            .any(|key| !allowed(key.as_str()) || key == "type")
         || fixed.keys().any(|key| columns.contains_key(key))
         || columns.values().any(|value| value.trim().is_empty())
     {
-        return Err(invalid("Một trường chỉ được lấy từ một cột hoặc một giá trị chung hợp lệ."));
+        return Err(invalid(
+            "Một trường chỉ được lấy từ một cột hoặc một giá trị chung hợp lệ.",
+        ));
     }
     for field in ["date", "sku", "unit", "quantity", "amount", "document"] {
-        if !columns.contains_key(field)
-            && fixed.get(field).is_none_or(|v| v.trim().is_empty())
-        {
+        if !columns.contains_key(field) && fixed.get(field).is_none_or(|v| v.trim().is_empty()) {
             return Err(invalid(
                 "Thiếu trường bắt buộc: cần chọn cột Excel hoặc khai báo giá trị chung.",
             ));
@@ -340,7 +342,9 @@ fn validate_sources(
             || (field == "quantity" && fixed_micro(value).is_none())
             || (field == "amount" && whole_vnd(value).is_none())
         {
-            return Err(invalid("Giá trị chung không hợp lệ. Hãy kiểm tra ngày, số lượng và tiền VND."));
+            return Err(invalid(
+                "Giá trị chung không hợp lệ. Hãy kiểm tra ngày, số lượng và tiền VND.",
+            ));
         }
     }
     Ok(())
@@ -622,7 +626,9 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             );
             continue;
         }
-        let quantity = match fixed_micro(get(cells, &map, &r.fixed_values, "quantity").trim_start_matches('-')) {
+        let quantity = match fixed_micro(
+            get(cells, &map, &r.fixed_values, "quantity").trim_start_matches('-'),
+        ) {
             Some(v) => v,
             None => {
                 report(
@@ -658,7 +664,11 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             report("Chứng từ", "Thiếu số chứng từ hoặc mã dòng nguồn.");
             continue;
         }
-        let doc = if r.fixed_values.get("document").is_some_and(|v| v == "@source-row") {
+        let doc = if r
+            .fixed_values
+            .get("document")
+            .is_some_and(|v| v == "@source-row")
+        {
             format!("SRC:{}:{}:{i}", &source_hash[..12], r.sheet_name)
         } else {
             document_source.to_owned()
@@ -839,10 +849,9 @@ pub fn save_import_mapping_profile(
     let key = mapping_name(&request.kind, &request.distributor_id, &request.headers)?;
     validate_sources(&request.kind, &request.columns, &request.fixed_values)?;
     if !matches!(
-            (request.kind.as_str(), request.row_kind.as_str()),
-            ("SALES_IN", "INVOICE" | "RETURN") | ("SALES_OUT", "DELIVERED" | "RETURN")
-        )
-    {
+        (request.kind.as_str(), request.row_kind.as_str()),
+        ("SALES_IN", "INVOICE" | "RETURN") | ("SALES_OUT", "DELIVERED" | "RETURN")
+    ) {
         return Err(invalid(
             "Cần chọn đủ các trường bắt buộc trước khi lưu mẫu.",
         ));
@@ -1301,12 +1310,17 @@ mod tests {
         let mut r = request();
         r.bytes = b"sku;qty;amount\n0007;2;240000\n0007;1;120000\n".to_vec();
         r.columns = [("sku", "sku"), ("quantity", "qty"), ("amount", "amount")]
-            .into_iter().map(|(key, value)| (key.into(), value.into())).collect();
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into()))
+            .collect();
         r.fixed_values = [
             ("date", "2026-10-01"),
             ("unit", "THUNG"),
             ("document", "@source-row"),
-        ].into_iter().map(|(key, value)| (key.into(), value.into())).collect();
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.into(), value.into()))
+        .collect();
         let data = checked(&c, &r).unwrap();
         assert_eq!(data.facts.len(), 2);
         assert_eq!(data.facts[0].quantity, 48_000_000);
@@ -1320,7 +1334,8 @@ mod tests {
     fn same_file_new_defaults_requires_replacement_and_is_not_duplicate() {
         let d = tempdir().unwrap();
         let db = AppDatabase::open(d.path()).unwrap();
-        db.create_operator("CI", crate::storage::OperatorRole::Asm).unwrap();
+        db.create_operator("CI", crate::storage::OperatorRole::Asm)
+            .unwrap();
         let c = db.connection.lock().unwrap();
         setup(&c);
         let first = request();
@@ -1331,9 +1346,13 @@ mod tests {
         revised.fixed_values.insert("unit".into(), "THUNG".into());
         assert!(!same_mapping(
             &c,
-            &c.query_row("SELECT id FROM import_batches WHERE active=1", [], |r| r.get::<_, String>(0)).unwrap(),
+            &c.query_row("SELECT id FROM import_batches WHERE active=1", [], |r| {
+                r.get::<_, String>(0)
+            })
+            .unwrap(),
             &revised
-        ).unwrap());
+        )
+        .unwrap());
         assert!(commit_with_conn(&c, revised.clone(), hash.clone(), false).is_err());
         assert!(commit_with_conn(&c, revised, hash, true).unwrap().replaced);
     }
