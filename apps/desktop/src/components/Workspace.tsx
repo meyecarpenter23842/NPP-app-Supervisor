@@ -107,7 +107,7 @@ export default function Workspace({ operator, onUpdate }: {
                 onClick={() => setViewId(view)} onKeyDown={(event) => onViewKey(event, index)}>{view}</button>)}
             </div>
             <div className="business-content" id="business-panel" role="tabpanel" aria-labelledby={`subtab-${pageId}-${current.views.indexOf(activeView)}`} data-page={pageId} data-view={activeView}>
-              <BusinessContent pageId={pageId} view={activeView} onGoToImport={() => choosePage('imports')} />
+              <BusinessContent pageId={pageId} view={activeView} onGoToImport={() => choosePage('imports')} onGoToCatalog={() => { choosePage('sku'); setViewId('Nhập Excel'); }} />
             </div>
           </>}
         </main>
