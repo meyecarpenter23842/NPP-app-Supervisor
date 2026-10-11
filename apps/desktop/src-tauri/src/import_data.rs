@@ -1,10 +1,16 @@
 //! M2.2 preview + M2.3 explicit atomic activation. Source codes are scoped to
 //! distributor and business date; every commit re-parses and validates the bytes.
-use crate::{import_parse::{self,Sheet},storage::AppDatabase};
-use rusqlite::{params,Connection,OptionalExtension,Transaction};
-use serde::{Deserialize,Serialize};
-use sha2::{Digest,Sha256};
-use std::{collections::{HashMap,HashSet},sync::MutexGuard};
+use crate::{
+    import_parse::{self, Sheet},
+    storage::AppDatabase,
+};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::MutexGuard,
+};
 use tauri::State;
 
 #[derive(Debug, Serialize)]
@@ -96,88 +102,205 @@ fn date(value:&str)->Option<String>{
     }
     None
 }
-fn civil_from_unix_days(days:i64)->(i64,i64,i64){
-    let z=days+719468;
-    let era=if z>=0{z}else{z-146096}/146097;
-    let doe=z-era*146097;
-    let yoe=(doe-doe/1460+doe/36524-doe/146096)/365;
-    let mut y=yoe+era*400;
-    let doy=doe-(365*yoe+yoe/4-yoe/100);
-    let mp=(5*doy+2)/153;
-    let d=doy-(153*mp+2)/5+1;
-    let m=mp+if mp<10{3}else{-9};
-    if m<=2{y+=1;}
-    (y,m,d)
+fn civil_from_unix_days(days: i64) -> (i64, i64, i64) {
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let mut y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = mp + if mp < 10 { 3 } else { -9 };
+    if m <= 2 {
+        y += 1;
+    }
+    (y, m, d)
 }
-fn fixed_micro(raw:&str)->Option<i64>{
-    let s=raw.trim();
-    if s.is_empty()||s.starts_with('-')||s.contains(',') {return None;}
-    let mut it=s.split('.');
-    let whole=it.next()?;let frac=it.next().unwrap_or("");
-    if it.next().is_some()||whole.is_empty()||!whole.bytes().all(|x|x.is_ascii_digit())||!frac.bytes().all(|x|x.is_ascii_digit())||frac.len()>6{return None;}
-    let n=whole.parse::<i128>().ok()?.checked_mul(1_000_000)?;
-    let sub=if frac.is_empty(){0}else{frac.parse::<i128>().ok()?.checked_mul(10_i128.pow((6-frac.len()) as u32))?};
+fn fixed_micro(raw: &str) -> Option<i64> {
+    let s = raw.trim();
+    if s.is_empty() || s.starts_with('-') || s.contains(',') {
+        return None;
+    }
+    let mut it = s.split('.');
+    let whole = it.next()?;
+    let frac = it.next().unwrap_or("");
+    if it.next().is_some()
+        || whole.is_empty()
+        || !whole.bytes().all(|x| x.is_ascii_digit())
+        || !frac.bytes().all(|x| x.is_ascii_digit())
+        || frac.len() > 6
+    {
+        return None;
+    }
+    let n = whole.parse::<i128>().ok()?.checked_mul(1_000_000)?;
+    let sub = if frac.is_empty() {
+        0
+    } else {
+        frac.parse::<i128>()
+            .ok()?
+            .checked_mul(10_i128.pow((6 - frac.len()) as u32))?
+    };
     i64::try_from(n.checked_add(sub)?).ok()
 }
-fn whole_vnd(raw:&str)->Option<i64>{
-    let s=raw.trim();let s=s.trim_start_matches('-');
-    if s.is_empty()||!s.bytes().all(|x|x.is_ascii_digit()){return None;}
-    raw.trim().parse::<i64>().ok().and_then(|x|x.checked_abs())
-}
-fn as_date(s:&str)->Result<String,ImportError>{date(s).ok_or_else(||invalid("Ngày không hợp lệ. Hãy dùng YYYY-MM-DD hoặc DD/MM/YYYY."))}
-fn verify_request(r:&ImportRequest)->Result<(),ImportError>{
-    if !["SALES_IN","SALES_OUT"].contains(&r.kind.as_str()) || r.distributor_id.trim().is_empty()
-        || r.file_name.len()>255 || r.sheet_name.trim().is_empty() || r.header_row==0 || r.header_row>20
-        || r.period_from>r.period_to || !valid_date(&r.period_from)||!valid_date(&r.period_to)
-        || r.columns.len()>16 {return Err(invalid("Kiểm tra NPP, kỳ, loại doanh số, trang tính và dòng tiêu đề."));}
-    for field in ["date","sku","unit","quantity","amount","document"] {
-        if r.columns.get(field).is_none_or(|h|h.trim().is_empty()){return Err(invalid("Cần chọn đủ cột ngày, mã hàng, đơn vị, số lượng, tiền và chứng từ."));}
+fn whole_vnd(raw: &str) -> Option<i64> {
+    let s = raw.trim();
+    let s = s.trim_start_matches('-');
+    if s.is_empty() || !s.bytes().all(|x| x.is_ascii_digit()) {
+        return None;
     }
-    if !matches!((r.kind.as_str(),r.row_kind.as_str()),("SALES_IN","INVOICE"|"RETURN")|("SALES_OUT","DELIVERED"|"RETURN")){
+    raw.trim().parse::<i64>().ok().and_then(|x| x.checked_abs())
+}
+fn as_date(s: &str) -> Result<String, ImportError> {
+    date(s).ok_or_else(|| invalid("Ngày không hợp lệ. Hãy dùng YYYY-MM-DD hoặc DD/MM/YYYY."))
+}
+fn verify_request(r: &ImportRequest) -> Result<(), ImportError> {
+    if !["SALES_IN", "SALES_OUT"].contains(&r.kind.as_str())
+        || r.distributor_id.trim().is_empty()
+        || r.file_name.len() > 255
+        || r.sheet_name.trim().is_empty()
+        || r.header_row == 0
+        || r.header_row > 20
+        || r.period_from > r.period_to
+        || !valid_date(&r.period_from)
+        || !valid_date(&r.period_to)
+        || r.columns.len() > 16
+    {
+        return Err(invalid(
+            "Kiểm tra NPP, kỳ, loại doanh số, trang tính và dòng tiêu đề.",
+        ));
+    }
+    for field in ["date", "sku", "unit", "quantity", "amount", "document"] {
+        if r.columns.get(field).is_none_or(|h| h.trim().is_empty()) {
+            return Err(invalid(
+                "Cần chọn đủ cột ngày, mã hàng, đơn vị, số lượng, tiền và chứng từ.",
+            ));
+        }
+    }
+    if !matches!(
+        (r.kind.as_str(), r.row_kind.as_str()),
+        ("SALES_IN", "INVOICE" | "RETURN") | ("SALES_OUT", "DELIVERED" | "RETURN")
+    ) {
         return Err(invalid("Hãy xác định rõ loại chứng từ bán hoặc trả hàng."));
     }
     Ok(())
 }
-fn selected_sheet<'a>(sheets:&'a [Sheet],r:&ImportRequest)->Result<&'a Sheet,ImportError>{
-    sheets.iter().find(|s|s.name==r.sheet_name).ok_or_else(||invalid("Không thấy trang tính đã chọn."))
+fn selected_sheet<'a>(sheets: &'a [Sheet], r: &ImportRequest) -> Result<&'a Sheet, ImportError> {
+    sheets
+        .iter()
+        .find(|s| s.name == r.sheet_name)
+        .ok_or_else(|| invalid("Không thấy trang tính đã chọn."))
 }
-fn issue(row:usize,column:&str,severity:&'static str,message:&str)->ImportIssue{
-    ImportIssue{row,column:column.into(),severity,message:message.into()}
+fn issue(row: usize, column: &str, severity: &'static str, message: &str) -> ImportIssue {
+    ImportIssue {
+        row,
+        column: column.into(),
+        severity,
+        message: message.into(),
+    }
 }
-fn column_map(sheet:&Sheet,r:&ImportRequest)->Result<HashMap<String,usize>,ImportError>{
-    let headers=sheet.rows.iter().find(|(i,_)|*i==r.header_row).map(|(_,cells)|cells).ok_or_else(||invalid("Không tìm thấy dòng tiêu đề đã chọn."))?;
-    let mut indices=HashMap::new();let mut used=HashSet::new();
-    for (field,header) in &r.columns {
-        if !["date","sku","unit","quantity","amount","document","line","employee","type"].contains(&field.as_str()){return Err(invalid("Có loại cột không hợp lệ."));}
-        let matches:Vec<_>=headers.iter().enumerate().filter(|(_,h)|*h==header).map(|(i,_)|i).collect();
-        if matches.len()!=1{return Err(invalid("Tên cột bị trùng hoặc không tìm thấy. Hãy chọn lại dòng tiêu đề."));}
-        if !used.insert(matches[0]){return Err(invalid("Không thể dùng một cột Excel cho hai loại thông tin."));}
-        indices.insert(field.clone(),matches[0]);
+fn column_map(sheet: &Sheet, r: &ImportRequest) -> Result<HashMap<String, usize>, ImportError> {
+    let headers = sheet
+        .rows
+        .iter()
+        .find(|(i, _)| *i == r.header_row)
+        .map(|(_, cells)| cells)
+        .ok_or_else(|| invalid("Không tìm thấy dòng tiêu đề đã chọn."))?;
+    let mut indices = HashMap::new();
+    let mut used = HashSet::new();
+    for (field, header) in &r.columns {
+        if ![
+            "date", "sku", "unit", "quantity", "amount", "document", "line", "employee", "type",
+        ]
+        .contains(&field.as_str())
+        {
+            return Err(invalid("Có loại cột không hợp lệ."));
+        }
+        let matches: Vec<_> = headers
+            .iter()
+            .enumerate()
+            .filter(|(_, h)| *h == header)
+            .map(|(i, _)| i)
+            .collect();
+        if matches.len() != 1 {
+            return Err(invalid(
+                "Tên cột bị trùng hoặc không tìm thấy. Hãy chọn lại dòng tiêu đề.",
+            ));
+        }
+        if !used.insert(matches[0]) {
+            return Err(invalid(
+                "Không thể dùng một cột Excel cho hai loại thông tin.",
+            ));
+        }
+        indices.insert(field.clone(), matches[0]);
     }
     Ok(indices)
 }
-fn get<'a>(row:&'a [String],indices:&HashMap<String,usize>,field:&str)->&'a str{
-    indices.get(field).and_then(|i|row.get(*i)).map(String::as_str).unwrap_or("").trim()
+fn get<'a>(row: &'a [String], indices: &HashMap<String, usize>, field: &str) -> &'a str {
+    indices
+        .get(field)
+        .and_then(|i| row.get(*i))
+        .map(String::as_str)
+        .unwrap_or("")
+        .trim()
 }
-fn classify(r:&ImportRequest,source:&str)->Result<Option<&'static str>,String>{
-    if !r.columns.contains_key("type"){return Ok(Some(if r.row_kind=="RETURN"{"RETURN"}else if r.kind=="SALES_IN"{"INVOICE"}else{"DELIVERED"}));}
-    let positive=r.positive_value.as_deref().unwrap_or(if r.kind=="SALES_IN"{"INVOICE"}else{"DELIVERED"});
-    let returned=r.return_value.as_deref().unwrap_or("RETURN");
-    let cancelled=r.cancel_value.as_deref().unwrap_or("CANCELLED");
-    if positive.trim().is_empty()||returned.trim().is_empty()||positive.eq_ignore_ascii_case(returned){
+fn classify(r: &ImportRequest, source: &str) -> Result<Option<&'static str>, String> {
+    if !r.columns.contains_key("type") {
+        return Ok(Some(if r.row_kind == "RETURN" {
+            "RETURN"
+        } else if r.kind == "SALES_IN" {
+            "INVOICE"
+        } else {
+            "DELIVERED"
+        }));
+    }
+    let positive = r
+        .positive_value
+        .as_deref()
+        .unwrap_or(if r.kind == "SALES_IN" {
+            "INVOICE"
+        } else {
+            "DELIVERED"
+        });
+    let returned = r.return_value.as_deref().unwrap_or("RETURN");
+    let cancelled = r.cancel_value.as_deref().unwrap_or("CANCELLED");
+    if positive.trim().is_empty()
+        || returned.trim().is_empty()
+        || positive.eq_ignore_ascii_case(returned)
+    {
         return Err("Giá trị loại chứng từ bán/trả chưa hợp lệ.".into());
     }
-    if source.eq_ignore_ascii_case(positive){Ok(Some(if r.kind=="SALES_IN"{"INVOICE"}else{"DELIVERED"}))}
-    else if source.eq_ignore_ascii_case(returned){Ok(Some("RETURN"))}
-    else if !cancelled.trim().is_empty()&&source.eq_ignore_ascii_case(cancelled){Ok(None)}
-    else{Err("Loại chứng từ không khớp giá trị đã khai báo. Kiểm tra dòng này.".into())}
+    if source.eq_ignore_ascii_case(positive) {
+        Ok(Some(if r.kind == "SALES_IN" {
+            "INVOICE"
+        } else {
+            "DELIVERED"
+        }))
+    } else if source.eq_ignore_ascii_case(returned) {
+        Ok(Some("RETURN"))
+    } else if !cancelled.trim().is_empty() && source.eq_ignore_ascii_case(cancelled) {
+        Ok(None)
+    } else {
+        Err("Loại chứng từ không khớp giá trị đã khai báo. Kiểm tra dòng này.".into())
+    }
 }
-fn lookup_sku(db:&Connection,npp:&str,code:&str,unit:&str,on:&str)->rusqlite::Result<Option<(String,i64,i64)>>{
+fn lookup_sku(
+    db: &Connection,
+    npp: &str,
+    code: &str,
+    unit: &str,
+    on: &str,
+) -> rusqlite::Result<Option<(String, i64, i64)>> {
     db.query_row("SELECT product_id,conversion_num,conversion_den FROM sku_aliases
        WHERE distributor_id=?1 AND raw_sku_code=?2 AND raw_unit=?3 AND effective_from<=?4 AND (effective_to IS NULL OR effective_to>=?4)",
        params![npp,code,unit,on],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional()
 }
-fn lookup_employee(db:&Connection,npp:&str,code:&str,on:&str)->rusqlite::Result<Option<String>>{
+fn lookup_employee(
+    db: &Connection,
+    npp: &str,
+    code: &str,
+    on: &str,
+) -> rusqlite::Result<Option<String>> {
     db.query_row("SELECT employee_id FROM employee_code_aliases
        WHERE distributor_id=?1 AND raw_employee_code=?2 AND effective_from<=?3 AND (effective_to IS NULL OR effective_to>=?3)",
        params![npp,code,on],|row|row.get(0)).optional()
@@ -308,52 +431,97 @@ fn commit_with_conn(connection:&Connection,request:ImportRequest,expected_sha256
         VALUES(?1,?2,?3,?4,?5,'TRANSACTION',?6,?7,?8,?9,'COMMITTED',1,?10,?11,?12,0,{now},{now})"),
         params![id,request.kind,request.distributor_id,request.period_from,request.period_to,request.file_name,c.sha,request.sheet_name,
         profile_id,c.previous.as_ref().map(|(x,_)|x),c.total as i64,c.facts.len() as i64]).map_err(|_|failed())?;
-    for fact in &c.facts{
-        if request.kind=="SALES_IN"{
+    for fact in &c.facts {
+        if request.kind == "SALES_IN" {
             tx.execute("INSERT INTO sales_in_facts(id,batch_id,distributor_id,product_id,business_date,document_no,document_line_no,kind,quantity_micro,net_amount_vnd,source_row)
             VALUES(lower(hex(randomblob(16))),?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
             params![id,request.distributor_id,fact.sku,fact.business_date,fact.document,fact.line,fact.kind,fact.quantity,fact.amount,fact.row as i64]).map_err(|_|failed())?;
-        }else{
+        } else {
             tx.execute("INSERT INTO sales_out_facts(id,batch_id,distributor_id,product_id,employee_id,business_date,document_no,document_line_no,kind,quantity_micro,net_amount_vnd,source_row)
             VALUES(lower(hex(randomblob(16))),?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
             params![id,request.distributor_id,fact.sku,fact.employee,fact.business_date,fact.document,fact.line,fact.kind,fact.quantity,fact.amount,fact.row as i64]).map_err(|_|failed())?;
         }
     }
-    for item in c.issues.iter().filter(|x|x.severity=="WARNING"){
+    for item in c.issues.iter().filter(|x| x.severity == "WARNING") {
         tx.execute("INSERT INTO import_issues(batch_id,sheet_name,source_row,column_name,severity,issue_code,message) VALUES(?1,?2,?3,?4,'WARNING','UNRESOLVED_EMPLOYEE',?5)",
             params![id,request.sheet_name,item.row as i64,item.column,item.message]).map_err(|_|failed())?;
     }
     tx.execute(&format!("INSERT INTO audit_events(id,event_type,actor_profile_id,entity_type,entity_id,created_at_utc)
         VALUES(lower(hex(randomblob(16))),'IMPORT_COMMIT',(SELECT id FROM local_operator WHERE id=1),'IMPORT_BATCH',?1,{now})"),[&id]).map_err(|_|failed())?;
-    tx.commit().map_err(|_|failed())?;
-    Ok(ImportResult{id,inserted:c.facts.len(),unresolved:c.unknown,replaced:c.previous.is_some(),already_imported:false})
+    tx.commit().map_err(|_| failed())?;
+    Ok(ImportResult {
+        id,
+        inserted: c.facts.len(),
+        unresolved: c.unknown,
+        replaced: c.previous.is_some(),
+        already_imported: false,
+    })
 }
 #[tauri::command]
-pub fn list_import_history(db:State<'_,AppDatabase>)->Result<Vec<ImportHistory>,ImportError>{
-    let c=conn(&db)?;
+pub fn list_import_history(db: State<'_, AppDatabase>) -> Result<Vec<ImportHistory>, ImportError> {
+    let c = conn(&db)?;
     let mut stmt=c.prepare("SELECT b.id,b.kind,d.name,COALESCE(b.period_from,''),COALESCE(b.period_to,''),
         b.source_file_name,b.source_sheet,b.status,b.active,b.total_rows,b.valid_rows,b.error_rows,b.imported_at_utc
         FROM import_batches b JOIN distributors d ON d.id=b.distributor_id ORDER BY b.imported_at_utc DESC,b.id DESC LIMIT 200").map_err(|_|failed())?;
-    let values=stmt.query_map([],|x|Ok(ImportHistory{id:x.get(0)?,kind:x.get(1)?,distributor_name:x.get(2)?,
-        period_from:x.get(3)?,period_to:x.get(4)?,source_file_name:x.get(5)?,source_sheet:x.get(6)?,
-        status:x.get(7)?,active:x.get(8)?,total_rows:x.get(9)?,valid_rows:x.get(10)?,
-        error_rows:x.get(11)?,imported_at_utc:x.get(12)?})).map_err(|_|failed())?;
-    values.collect::<rusqlite::Result<Vec<_>>>().map_err(|_|failed())
+    let values = stmt
+        .query_map([], |x| {
+            Ok(ImportHistory {
+                id: x.get(0)?,
+                kind: x.get(1)?,
+                distributor_name: x.get(2)?,
+                period_from: x.get(3)?,
+                period_to: x.get(4)?,
+                source_file_name: x.get(5)?,
+                source_sheet: x.get(6)?,
+                status: x.get(7)?,
+                active: x.get(8)?,
+                total_rows: x.get(9)?,
+                valid_rows: x.get(10)?,
+                error_rows: x.get(11)?,
+                imported_at_utc: x.get(12)?,
+            })
+        })
+        .map_err(|_| failed())?;
+    values
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| failed())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
-    fn request()->ImportRequest{
-        ImportRequest{file_name:"npp.csv".into(),bytes:b"date;sku;unit;qty;amount;doc;staff\n2026-10-01;0007;THUNG;2;240000;INV1;NV01\n".to_vec(),
-        kind:"SALES_OUT".into(),distributor_id:"npp".into(),period_from:"2026-10-01".into(),period_to:"2026-10-31".into(),
-        sheet_name:"CSV".into(),header_row:1,columns:[
-          ("date","date"),("sku","sku"),("unit","unit"),("quantity","qty"),("amount","amount"),("document","doc"),("employee","staff")]
-          .into_iter().map(|(a,b)|(a.into(),b.into())).collect(),row_kind:"DELIVERED".into(),
-          positive_value:None,return_value:None,cancel_value:None}
+    fn request() -> ImportRequest {
+        ImportRequest {
+            file_name: "npp.csv".into(),
+            bytes:
+                b"date;sku;unit;qty;amount;doc;staff\n2026-10-01;0007;THUNG;2;240000;INV1;NV01\n"
+                    .to_vec(),
+            kind: "SALES_OUT".into(),
+            distributor_id: "npp".into(),
+            period_from: "2026-10-01".into(),
+            period_to: "2026-10-31".into(),
+            sheet_name: "CSV".into(),
+            header_row: 1,
+            columns: [
+                ("date", "date"),
+                ("sku", "sku"),
+                ("unit", "unit"),
+                ("quantity", "qty"),
+                ("amount", "amount"),
+                ("document", "doc"),
+                ("employee", "staff"),
+            ]
+            .into_iter()
+            .map(|(a, b)| (a.into(), b.into()))
+            .collect(),
+            row_kind: "DELIVERED".into(),
+            positive_value: None,
+            return_value: None,
+            cancel_value: None,
+        }
     }
-    fn setup(c:&Connection){
+    fn setup(c: &Connection) {
         c.execute_batch("INSERT INTO distributors(id,code,name,created_at_utc) VALUES('npp','NPP','Distributor','2026');
          INSERT INTO products(id,sku_code,name,base_unit) VALUES('item','P','Item','LON');
          INSERT INTO sku_aliases(id,distributor_id,raw_sku_code,product_id,raw_unit,conversion_num,conversion_den,effective_from)
@@ -395,7 +563,7 @@ mod tests {
         let replacement=commit_with_conn(&c,revised,new_hash,true).unwrap();
         assert!(replacement.replaced);
         assert_eq!(replacement.inserted,1);
-        let amount:i64=c.query_row("SELECT net_amount_vnd FROM active_sales_out",[],|r|r.get(0)).unwrap();
+        let amount:i64=c.query_row("SELECT net_amount_vnd FROM v_active_sales_out",[],|r|r.get(0)).unwrap();
         assert_eq!(amount,360000);
         let stored:i64=c.query_row("SELECT count(*) FROM sales_out_facts",[],|r|r.get(0)).unwrap();
         assert_eq!(stored,2); // old revision remains for audit
@@ -430,7 +598,7 @@ mod tests {
         let mut broken=request();
         broken.bytes=b"date;sku;unit;qty;amount;doc;staff\n2026-10-01;MISSING;THUNG;1;1;INV1;NV01\n".to_vec();
         assert!(commit_with_conn(&c,broken.clone(),digest(&broken.bytes),true).is_err());
-        let amount:i64=c.query_row("SELECT net_amount_vnd FROM active_sales_out",[],|r|r.get(0)).unwrap();
+        let amount:i64=c.query_row("SELECT net_amount_vnd FROM v_active_sales_out",[],|r|r.get(0)).unwrap();
         assert_eq!(amount,240000);
     }
     #[test] fn missing_employee_remains_unassigned(){
