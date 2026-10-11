@@ -4,7 +4,7 @@ use crate::{
     import_parse::{self, Sheet},
     storage::AppDatabase,
 };
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -14,90 +14,203 @@ use std::{
 use tauri::State;
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all="camelCase")]
-pub struct ImportError {code:&'static str,message:String}
-fn invalid(s:&str)->ImportError{ImportError{code:"IMPORT_INVALID",message:s.to_owned()}}
-fn failed()->ImportError{invalid("Không thể kiểm tra hoặc ghi dữ liệu. Vui lòng thử lại.")}
-fn conflict(s:&str)->ImportError{ImportError{code:"IMPORT_CONFLICT",message:s.to_owned()}}
-#[derive(Debug,Deserialize)]
-#[serde(rename_all="camelCase",deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportError {
+    code: &'static str,
+    message: String,
+}
+fn invalid(s: &str) -> ImportError {
+    ImportError {
+        code: "IMPORT_INVALID",
+        message: s.to_owned(),
+    }
+}
+fn failed() -> ImportError {
+    invalid("Không thể kiểm tra hoặc ghi dữ liệu. Vui lòng thử lại.")
+}
+fn conflict(s: &str) -> ImportError {
+    ImportError {
+        code: "IMPORT_CONFLICT",
+        message: s.to_owned(),
+    }
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportRequest {
-    file_name:String,
-    bytes:Vec<u8>,
-    kind:String,
-    distributor_id:String,
-    period_from:String,
-    period_to:String,
-    sheet_name:String,
-    header_row:usize,
-    columns:HashMap<String,String>,
-    row_kind:String,
-    positive_value:Option<String>,
-    return_value:Option<String>,
-    cancel_value:Option<String>,
+    file_name: String,
+    bytes: Vec<u8>,
+    kind: String,
+    distributor_id: String,
+    period_from: String,
+    period_to: String,
+    sheet_name: String,
+    header_row: usize,
+    columns: HashMap<String, String>,
+    row_kind: String,
+    positive_value: Option<String>,
+    return_value: Option<String>,
+    cancel_value: Option<String>,
 }
-#[derive(Debug,Serialize)]
-#[serde(rename_all="camelCase")]
-pub struct RowView {row:usize,values:Vec<String>}
-#[derive(Debug,Serialize)]
-#[serde(rename_all="camelCase")]
-pub struct SheetView {name:String,rows:usize,first_rows:Vec<RowView>,has_formulas:bool}
-#[derive(Debug,Serialize)]
-#[serde(rename_all="camelCase")]
-pub struct FileView {sheets:Vec<SheetView>,sha256:String}
-#[derive(Debug,Clone,Serialize)]
-#[serde(rename_all="camelCase")]
-pub struct ImportIssue {row:usize,column:String,severity:&'static str,message:String}
-#[derive(Debug,Serialize)]
-#[serde(rename_all="camelCase")]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RowView {
+    row: usize,
+    values: Vec<String>,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SheetView {
+    name: String,
+    rows: usize,
+    first_rows: Vec<RowView>,
+    has_formulas: bool,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileView {
+    sheets: Vec<SheetView>,
+    sha256: String,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportIssue {
+    row: usize,
+    column: String,
+    severity: &'static str,
+    message: String,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Preview {
-    sha256:String,
-    total_rows:usize,
-    valid_rows:usize,
-    skipped_rows:usize,
-    unknown_employees:usize,
-    issues:Vec<ImportIssue>,
-    error_rows:usize,
-    sample:Vec<RowView>,
-    has_previous:bool,
-    same_file_already_active:bool,
+    sha256: String,
+    total_rows: usize,
+    valid_rows: usize,
+    skipped_rows: usize,
+    unknown_employees: usize,
+    issues: Vec<ImportIssue>,
+    error_rows: usize,
+    sample: Vec<RowView>,
+    has_previous: bool,
+    same_file_already_active: bool,
 }
-#[derive(Debug,Serialize)]
-#[serde(rename_all="camelCase")]
-pub struct ImportResult {id:String,inserted:usize,unresolved:usize,replaced:bool,already_imported:bool}
-#[derive(Debug,Serialize)]
-#[serde(rename_all="camelCase")]
-pub struct ImportHistory {id:String,kind:String,distributor_name:String,period_from:String,period_to:String,source_file_name:String,source_sheet:Option<String>,status:String,active:bool,total_rows:i64,valid_rows:i64,error_rows:i64,imported_at_utc:String}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportResult {
+    id: String,
+    inserted: usize,
+    unresolved: usize,
+    replaced: bool,
+    already_imported: bool,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportHistory {
+    id: String,
+    kind: String,
+    distributor_name: String,
+    period_from: String,
+    period_to: String,
+    source_file_name: String,
+    source_sheet: Option<String>,
+    status: String,
+    active: bool,
+    total_rows: i64,
+    valid_rows: i64,
+    error_rows: i64,
+    imported_at_utc: String,
+}
 #[derive(Clone)]
-struct Fact {row:usize,sku:String,employee:Option<String>,business_date:String,document:String,line:Option<String>,kind:String,quantity:i64,amount:i64}
-struct Checked {facts:Vec<Fact>,issues:Vec<ImportIssue>,total:usize,skipped:usize,unknown:usize,error_rows:usize,sha:String,previous:Option<(String,String)>}
-
-fn digest(b:&[u8])->String{format!("{:x}",Sha256::digest(b))}
-fn valid_date(d:&str)->bool{
-    let v=d.as_bytes();
-    if v.len()!=10||v[4]!=b'-'||v[7]!=b'-'||v.iter().enumerate().any(|(i,c)|i!=4&&i!=7&&!c.is_ascii_digit()){return false;}
-    let (Ok(year),Ok(month),Ok(day))=(d[..4].parse::<i32>(),d[5..7].parse::<u32>(),d[8..10].parse::<u32>())else{return false};
-    if year<1900 || !(1..=12).contains(&month) {return false;}
-    let leap=year%4==0&&(year%100!=0||year%400==0);
-    let md=[31,if leap{29}else{28},31,30,31,30,31,31,30,31,30,31];
-    day>0&&day<=md[(month-1) as usize]
+struct Fact {
+    row: usize,
+    sku: String,
+    employee: Option<String>,
+    business_date: String,
+    document: String,
+    line: Option<String>,
+    kind: String,
+    quantity: i64,
+    amount: i64,
 }
-fn date(value:&str)->Option<String>{
-    let v=value.trim();
-    if valid_date(v){return Some(v.into());}
-    let parts:Vec<_>=v.split('/').collect();
-    if parts.len()==3{
-        let (Ok(d),Ok(m),Ok(y))=(parts[0].parse::<u32>(),parts[1].parse::<u32>(),parts[2].parse::<i32>())else{return None};
-        let iso=format!("{y:04}-{m:02}-{d:02}");
-        if valid_date(&iso){return Some(iso);}
+struct Checked {
+    facts: Vec<Fact>,
+    issues: Vec<ImportIssue>,
+    total: usize,
+    skipped: usize,
+    unknown: usize,
+    error_rows: usize,
+    sha: String,
+    previous: Option<(String, String)>,
+}
+
+fn digest(b: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(b))
+}
+fn valid_date(d: &str) -> bool {
+    let v = d.as_bytes();
+    if v.len() != 10
+        || v[4] != b'-'
+        || v[7] != b'-'
+        || v.iter()
+            .enumerate()
+            .any(|(i, c)| i != 4 && i != 7 && !c.is_ascii_digit())
+    {
+        return false;
+    }
+    let (Ok(year), Ok(month), Ok(day)) = (
+        d[..4].parse::<i32>(),
+        d[5..7].parse::<u32>(),
+        d[8..10].parse::<u32>(),
+    ) else {
+        return false;
+    };
+    if year < 1900 || !(1..=12).contains(&month) {
+        return false;
+    }
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let md = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    day > 0 && day <= md[(month - 1) as usize]
+}
+fn date(value: &str) -> Option<String> {
+    let v = value.trim();
+    if valid_date(v) {
+        return Some(v.into());
+    }
+    let parts: Vec<_> = v.split('/').collect();
+    if parts.len() == 3 {
+        let (Ok(d), Ok(m), Ok(y)) = (
+            parts[0].parse::<u32>(),
+            parts[1].parse::<u32>(),
+            parts[2].parse::<i32>(),
+        ) else {
+            return None;
+        };
+        let iso = format!("{y:04}-{m:02}-{d:02}");
+        if valid_date(&iso) {
+            return Some(iso);
+        }
     }
     // Excel 1900 day count: 25569 corresponds to 1970-01-01.
-    if let Ok(serial)=v.parse::<i64>(){
-        if (61..=2_958_465).contains(&serial){
-            let days=serial-25_569;
-            let (year,month,day)=civil_from_unix_days(days);
-            let iso=format!("{year:04}-{month:02}-{day:02}");
-            if valid_date(&iso){return Some(iso);}
+    if let Ok(serial) = v.parse::<i64>() {
+        if (61..=2_958_465).contains(&serial) {
+            let days = serial - 25_569;
+            let (year, month, day) = civil_from_unix_days(days);
+            let iso = format!("{year:04}-{month:02}-{day:02}");
+            if valid_date(&iso) {
+                return Some(iso);
+            }
         }
     }
     None
@@ -305,126 +418,330 @@ fn lookup_employee(
        WHERE distributor_id=?1 AND raw_employee_code=?2 AND effective_from<=?3 AND (effective_to IS NULL OR effective_to>=?3)",
        params![npp,code,on],|row|row.get(0)).optional()
 }
-fn active(db:&Connection,r:&ImportRequest)->rusqlite::Result<Option<(String,String)>>{
-    db.query_row("SELECT id,source_file_sha256 FROM import_batches
+fn active(db: &Connection, r: &ImportRequest) -> rusqlite::Result<Option<(String, String)>> {
+    db.query_row(
+        "SELECT id,source_file_sha256 FROM import_batches
        WHERE kind=?1 AND distributor_id=?2 AND period_from=?3 AND period_to=?4 AND active=1",
-       params![r.kind,r.distributor_id,r.period_from,r.period_to],|row|Ok((row.get(0)?,row.get(1)?))).optional()
+        params![r.kind, r.distributor_id, r.period_from, r.period_to],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()
 }
-fn checked(db:&Connection,r:&ImportRequest)->Result<Checked,ImportError>{
+fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
     verify_request(r)?;
-    let exists:i64=db.query_row("SELECT count(*) FROM distributors WHERE id=?1 AND active=1",[&r.distributor_id],|x|x.get(0)).map_err(|_|failed())?;
-    if exists!=1{return Err(invalid("Nhà phân phối chưa có hoặc đã ngừng sử dụng."));}
-    let sheets=import_parse::parse(&r.file_name,&r.bytes).map_err(|s|invalid(&s))?;
-    let sheet=selected_sheet(&sheets,r)?;
-    let map=column_map(sheet,r)?;
-    let mut facts=Vec::new();let mut issues=Vec::new();let mut seen=HashSet::new();
-    let(mut total,mut skipped,mut unknown,mut error_rows)=(0usize,0usize,0usize,0usize);
-    for (i,cells) in sheet.rows.iter().filter(|(i,_)|*i>r.header_row){
-        if cells.iter().all(|c|c.trim().is_empty()){continue;}
-        total+=1;
-        let mut report=|col:&str,msg:&str|{
-            error_rows+=1;
-            if issues.len()<250 {issues.push(issue(*i,col,"ERROR",msg));}
-        };
-        if cells.iter().any(|x|x=="[CÔNG THỨC]"){report("Excel","Tệp có công thức tại dòng này. Hãy chuyển thành giá trị trước khi nhập.");continue;}
-        let on=match as_date(get(cells,&map,"date")){Ok(v)=>v,Err(_)=>{report("Ngày","Ngày không hợp lệ.");continue;}};
-        if on<r.period_from || on>r.period_to {report("Ngày","Ngày chứng từ ngoài kỳ đã chọn.");continue;}
-        let status=match classify(r,get(cells,&map,"type")){
-            Ok(Some(v))=>v,Ok(None)=>{skipped+=1;continue;},
-            Err(_)=>{report("Loại chứng từ","Không nhận diện được loại bán/trả/hủy.");continue;}
-        };
-        let code=get(cells,&map,"sku");
-        let unit=get(cells,&map,"unit");
-        let sku=match lookup_sku(db,&r.distributor_id,code,unit,&on).map_err(|_|failed())?{
-            Some((id,n,d)) if n>0&&d>0=>(id,n,d),
-            _=>{report("Mã hàng","Không tìm thấy mã hàng và đơn vị của NPP trong thời gian đã chọn.");continue;}
-        };
-        if status!="RETURN" && (get(cells,&map,"quantity").starts_with('-') || get(cells,&map,"amount").starts_with('-')) {
-            report("Số lượng / giá trị","Doanh số bán ra không được âm. Chỉ dòng trả hàng được ghi số âm.");continue;
-        }
-        let quantity=match fixed_micro(get(cells,&map,"quantity").trim_start_matches('-')){
-            Some(v)=>v,None=>{report("Số lượng","Số lượng phải là số không âm, tối đa 6 chữ số thập phân.");continue;}
-        };
-        let adjusted=(quantity as i128).checked_mul(sku.1 as i128).and_then(|v|v.checked_div(sku.2 as i128));
-        let Some(micro)=adjusted.and_then(|v|i64::try_from(v).ok()) else {
-            report("Số lượng","Quy đổi số lượng vượt giới hạn.");continue;
-        };
-        if (quantity as i128)*sku.1 as i128 % sku.2 as i128 !=0 {
-            report("Số lượng","Quy đổi ra đơn vị cơ sở không chính xác.");continue;
-        }
-        let amount=match whole_vnd(get(cells,&map,"amount")){
-            Some(v)=>v,None=>{report("Giá trị","Tiền VND phải là số nguyên, không dùng dấu phân cách hàng nghìn.");continue;}
-        };
-        let doc=get(cells,&map,"document");
-        if doc.is_empty(){report("Chứng từ","Thiếu số chứng từ.");continue;}
-        let line=get(cells,&map,"line");
-        let duplicate=(on.clone(),doc.to_owned(),line.to_owned(),sku.0.clone(),status.to_owned());
-        if !seen.insert(duplicate){report("Chứng từ","Trùng dòng chứng từ trong tệp.");continue;}
-        let staff=get(cells,&map,"employee");
-        let employee=if r.kind=="SALES_OUT"&&!staff.is_empty(){
-            lookup_employee(db,&r.distributor_id,staff,&on).map_err(|_|failed())?
-        }else{None};
-        if r.kind=="SALES_OUT"&&employee.is_none(){
-            unknown+=1;
-            if issues.len()<250{issues.push(issue(*i,"Nhân viên","WARNING","Chưa xác định nhân viên từ mã NPP; doanh số vẫn được giữ riêng."));}
-        }
-        let sign=if status=="RETURN"{-1}else{1};
-        facts.push(Fact{row:*i,sku:sku.0,employee,business_date:on,document:doc.into(),
-            line:if line.is_empty(){None}else{Some(line.into())},kind:status.into(),quantity:micro*sign,amount:amount*sign});
+    let exists: i64 = db
+        .query_row(
+            "SELECT count(*) FROM distributors WHERE id=?1 AND active=1",
+            [&r.distributor_id],
+            |x| x.get(0),
+        )
+        .map_err(|_| failed())?;
+    if exists != 1 {
+        return Err(invalid("Nhà phân phối chưa có hoặc đã ngừng sử dụng."));
     }
-    let previous=active(db,r).map_err(|_|failed())?;
-    Ok(Checked{facts,issues,total,skipped,unknown,error_rows,sha:digest(&r.bytes),previous})
-}
-fn summarize(c:&Checked)->(usize,usize){
-    let err_count=c.error_rows;
-    (c.facts.len(),err_count)
-}
-#[tauri::command]
-pub fn inspect_import_file(file_name:String,bytes:Vec<u8>)->Result<FileView,ImportError>{
-    let sheets=import_parse::parse(&file_name,&bytes).map_err(|s|invalid(&s))?;
-    Ok(FileView{sheets:sheets.into_iter().map(|s|SheetView{name:s.name,rows:s.rows.len(),
-        first_rows:s.rows.iter().take(12).map(|(row,values)|RowView{row:*row,values:values.clone()}).collect(),
-        has_formulas:s.has_formulas}).collect(),sha256:digest(&bytes)})
-}
-fn conn(db:&State<'_,AppDatabase>)->Result<MutexGuard<'_,Connection>,ImportError>{
-    db.connection.lock().map_err(|_|failed())
-}
-#[tauri::command]
-pub fn preview_import(db:State<'_,AppDatabase>,request:ImportRequest)->Result<Preview,ImportError>{
-    let db=conn(&db)?;
-    let c=checked(&db,&request)?;
-    let (valid,_)=summarize(&c);
-    Ok(Preview{sha256:c.sha.clone(),total_rows:c.total,valid_rows:valid,skipped_rows:c.skipped,error_rows:c.error_rows,
-        unknown_employees:c.unknown,issues:c.issues,sample:import_parse::parse(&request.file_name,&request.bytes)
-            .map_err(|s|invalid(&s))?.into_iter().find(|s|s.name==request.sheet_name).map(|s|s.rows.into_iter()
-            .filter(|(row,_)|*row>request.header_row).take(12).map(|(row,values)|RowView{row,values}).collect()).unwrap_or_default(),
-        has_previous:c.previous.is_some(),same_file_already_active:c.previous.is_some_and(|(_,h)|h==c.sha)})
-}
-#[tauri::command]
-pub fn commit_import(db:State<'_,AppDatabase>,request:ImportRequest,expected_sha256:String,replace_existing:bool)->Result<ImportResult,ImportError>{
-    let connection=conn(&db)?;
-    commit_with_conn(&connection,request,expected_sha256,replace_existing)
-}
-fn commit_with_conn(connection:&Connection,request:ImportRequest,expected_sha256:String,replace_existing:bool)->Result<ImportResult,ImportError>{
-    if digest(&request.bytes)!=expected_sha256{return Err(conflict("Tệp đã thay đổi từ khi xem trước. Hãy kiểm tra lại."));}
-    let tx=connection.unchecked_transaction().map_err(|_|failed())?;
-    let c=checked(&tx,&request)?;
-    if c.error_rows>0{return Err(conflict("Tệp còn dòng lỗi. Hãy kiểm tra và sửa trước khi nhập."));}
-    if c.facts.is_empty(){return Err(invalid("Tệp không có dòng hợp lệ để nhập."));}
-    if let Some((id,hash))=&c.previous {
-        if hash==&c.sha{return Ok(ImportResult{id:id.clone(),inserted:0,unresolved:c.unknown,replaced:false,already_imported:true});}
-        if !replace_existing{return Err(conflict("Đã có dữ liệu cho NPP và kỳ này. Chọn thay dữ liệu cũ nếu muốn nhập bản sửa."));}
+    let sheets = import_parse::parse(&r.file_name, &r.bytes).map_err(|s| invalid(&s))?;
+    let sheet = selected_sheet(&sheets, r)?;
+    let map = column_map(sheet, r)?;
+    let mut facts = Vec::new();
+    let mut issues = Vec::new();
+    let mut seen = HashSet::new();
+    let (mut total, mut skipped, mut unknown, mut error_rows) = (0usize, 0usize, 0usize, 0usize);
+    for (i, cells) in sheet.rows.iter().filter(|(i, _)| *i > r.header_row) {
+        if cells.iter().all(|c| c.trim().is_empty()) {
+            continue;
+        }
+        total += 1;
+        let mut report = |col: &str, msg: &str| {
+            error_rows += 1;
+            if issues.len() < 250 {
+                issues.push(issue(*i, col, "ERROR", msg));
+            }
+        };
+        if cells.iter().any(|x| x == "[CÔNG THỨC]") {
+            report(
+                "Excel",
+                "Tệp có công thức tại dòng này. Hãy chuyển thành giá trị trước khi nhập.",
+            );
+            continue;
+        }
+        let on = match as_date(get(cells, &map, "date")) {
+            Ok(v) => v,
+            Err(_) => {
+                report("Ngày", "Ngày không hợp lệ.");
+                continue;
+            }
+        };
+        if on < r.period_from || on > r.period_to {
+            report("Ngày", "Ngày chứng từ ngoài kỳ đã chọn.");
+            continue;
+        }
+        let status = match classify(r, get(cells, &map, "type")) {
+            Ok(Some(v)) => v,
+            Ok(None) => {
+                skipped += 1;
+                continue;
+            }
+            Err(_) => {
+                report("Loại chứng từ", "Không nhận diện được loại bán/trả/hủy.");
+                continue;
+            }
+        };
+        let code = get(cells, &map, "sku");
+        let unit = get(cells, &map, "unit");
+        let sku = match lookup_sku(db, &r.distributor_id, code, unit, &on).map_err(|_| failed())? {
+            Some((id, n, d)) if n > 0 && d > 0 => (id, n, d),
+            _ => {
+                report(
+                    "Mã hàng",
+                    "Không tìm thấy mã hàng và đơn vị của NPP trong thời gian đã chọn.",
+                );
+                continue;
+            }
+        };
+        if status != "RETURN"
+            && (get(cells, &map, "quantity").starts_with('-')
+                || get(cells, &map, "amount").starts_with('-'))
+        {
+            report(
+                "Số lượng / giá trị",
+                "Doanh số bán ra không được âm. Chỉ dòng trả hàng được ghi số âm.",
+            );
+            continue;
+        }
+        let quantity = match fixed_micro(get(cells, &map, "quantity").trim_start_matches('-')) {
+            Some(v) => v,
+            None => {
+                report(
+                    "Số lượng",
+                    "Số lượng phải là số không âm, tối đa 6 chữ số thập phân.",
+                );
+                continue;
+            }
+        };
+        let adjusted = (quantity as i128)
+            .checked_mul(sku.1 as i128)
+            .and_then(|v| v.checked_div(sku.2 as i128));
+        let Some(micro) = adjusted.and_then(|v| i64::try_from(v).ok()) else {
+            report("Số lượng", "Quy đổi số lượng vượt giới hạn.");
+            continue;
+        };
+        if (quantity as i128) * sku.1 as i128 % sku.2 as i128 != 0 {
+            report("Số lượng", "Quy đổi ra đơn vị cơ sở không chính xác.");
+            continue;
+        }
+        let amount = match whole_vnd(get(cells, &map, "amount")) {
+            Some(v) => v,
+            None => {
+                report(
+                    "Giá trị",
+                    "Tiền VND phải là số nguyên, không dùng dấu phân cách hàng nghìn.",
+                );
+                continue;
+            }
+        };
+        let doc = get(cells, &map, "document");
+        if doc.is_empty() {
+            report("Chứng từ", "Thiếu số chứng từ.");
+            continue;
+        }
+        let line = get(cells, &map, "line");
+        let duplicate = (
+            on.clone(),
+            doc.to_owned(),
+            line.to_owned(),
+            sku.0.clone(),
+            status.to_owned(),
+        );
+        if !seen.insert(duplicate) {
+            report("Chứng từ", "Trùng dòng chứng từ trong tệp.");
+            continue;
+        }
+        let staff = get(cells, &map, "employee");
+        let employee = if r.kind == "SALES_OUT" && !staff.is_empty() {
+            lookup_employee(db, &r.distributor_id, staff, &on).map_err(|_| failed())?
+        } else {
+            None
+        };
+        if r.kind == "SALES_OUT" && employee.is_none() {
+            unknown += 1;
+            if issues.len() < 250 {
+                issues.push(issue(
+                    *i,
+                    "Nhân viên",
+                    "WARNING",
+                    "Chưa xác định nhân viên từ mã NPP; doanh số vẫn được giữ riêng.",
+                ));
+            }
+        }
+        let sign = if status == "RETURN" { -1 } else { 1 };
+        facts.push(Fact {
+            row: *i,
+            sku: sku.0,
+            employee,
+            business_date: on,
+            document: doc.into(),
+            line: if line.is_empty() {
+                None
+            } else {
+                Some(line.into())
+            },
+            kind: status.into(),
+            quantity: micro * sign,
+            amount: amount * sign,
+        });
     }
-    let id:String=tx.query_row("SELECT lower(hex(randomblob(16)))",[],|x|x.get(0)).map_err(|_|failed())?;
-    let profile_id:String=tx.query_row("SELECT lower(hex(randomblob(16)))",[],|x|x.get(0)).map_err(|_|failed())?;
-    let map=serde_json::json!({"headerRow":request.header_row,"columns":request.columns,"positiveValue":request.positive_value,"returnValue":request.return_value,"cancelValue":request.cancel_value,"rowKind":request.row_kind});
-    let now="strftime('%Y-%m-%dT%H:%M:%fZ','now')";
-    tx.execute(&format!("INSERT INTO import_profiles(id,name,kind,version,mapping_json,created_at_utc)
-      VALUES(?1,?2,?3,1,?4,{now})"),params![profile_id,format!("{}:{}:{}",request.kind,request.distributor_id,profile_id),request.kind,map.to_string()]).map_err(|_|failed())?;
+    let previous = active(db, r).map_err(|_| failed())?;
+    Ok(Checked {
+        facts,
+        issues,
+        total,
+        skipped,
+        unknown,
+        error_rows,
+        sha: digest(&r.bytes),
+        previous,
+    })
+}
+fn summarize(c: &Checked) -> (usize, usize) {
+    let err_count = c.error_rows;
+    (c.facts.len(), err_count)
+}
+#[tauri::command]
+pub fn inspect_import_file(file_name: String, bytes: Vec<u8>) -> Result<FileView, ImportError> {
+    let sheets = import_parse::parse(&file_name, &bytes).map_err(|s| invalid(&s))?;
+    Ok(FileView {
+        sheets: sheets
+            .into_iter()
+            .map(|s| SheetView {
+                name: s.name,
+                rows: s.rows.len(),
+                first_rows: s
+                    .rows
+                    .iter()
+                    .take(12)
+                    .map(|(row, values)| RowView {
+                        row: *row,
+                        values: values.clone(),
+                    })
+                    .collect(),
+                has_formulas: s.has_formulas,
+            })
+            .collect(),
+        sha256: digest(&bytes),
+    })
+}
+fn conn(db: &State<'_, AppDatabase>) -> Result<MutexGuard<'_, Connection>, ImportError> {
+    db.connection.lock().map_err(|_| failed())
+}
+#[tauri::command]
+pub fn preview_import(
+    db: State<'_, AppDatabase>,
+    request: ImportRequest,
+) -> Result<Preview, ImportError> {
+    let db = conn(&db)?;
+    let c = checked(&db, &request)?;
+    let (valid, _) = summarize(&c);
+    Ok(Preview {
+        sha256: c.sha.clone(),
+        total_rows: c.total,
+        valid_rows: valid,
+        skipped_rows: c.skipped,
+        unknown_employees: c.unknown,
+        issues: c.issues,
+        error_rows: c.error_rows,
+        sample: import_parse::parse(&request.file_name, &request.bytes)
+            .map_err(|s| invalid(&s))?
+            .into_iter()
+            .find(|s| s.name == request.sheet_name)
+            .map(|s| {
+                s.rows
+                    .into_iter()
+                    .filter(|(row, _)| *row > request.header_row)
+                    .take(12)
+                    .map(|(row, values)| RowView { row, values })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        has_previous: c.previous.is_some(),
+        same_file_already_active: c.previous.is_some_and(|(_, h)| h == c.sha),
+    })
+}
+#[tauri::command]
+pub fn commit_import(
+    db: State<'_, AppDatabase>,
+    request: ImportRequest,
+    expected_sha256: String,
+    replace_existing: bool,
+) -> Result<ImportResult, ImportError> {
+    let connection = conn(&db)?;
+    commit_with_conn(&connection, request, expected_sha256, replace_existing)
+}
+fn commit_with_conn(
+    connection: &Connection,
+    request: ImportRequest,
+    expected_sha256: String,
+    replace_existing: bool,
+) -> Result<ImportResult, ImportError> {
+    if digest(&request.bytes) != expected_sha256 {
+        return Err(conflict(
+            "Tệp đã thay đổi từ khi xem trước. Hãy kiểm tra lại.",
+        ));
+    }
+    let tx = connection.unchecked_transaction().map_err(|_| failed())?;
+    let c = checked(&tx, &request)?;
+    if c.error_rows > 0 {
+        return Err(conflict(
+            "Tệp còn dòng lỗi. Hãy kiểm tra và sửa trước khi nhập.",
+        ));
+    }
+    if c.facts.is_empty() {
+        return Err(invalid("Tệp không có dòng hợp lệ để nhập."));
+    }
+    if let Some((id, hash)) = &c.previous {
+        if hash == &c.sha {
+            return Ok(ImportResult {
+                id: id.clone(),
+                inserted: 0,
+                unresolved: c.unknown,
+                replaced: false,
+                already_imported: true,
+            });
+        }
+        if !replace_existing {
+            return Err(conflict(
+                "Đã có dữ liệu cho NPP và kỳ này. Chọn thay dữ liệu cũ nếu muốn nhập bản sửa.",
+            ));
+        }
+    }
+    let id: String = tx
+        .query_row("SELECT lower(hex(randomblob(16)))", [], |x| x.get(0))
+        .map_err(|_| failed())?;
+    let profile_id: String = tx
+        .query_row("SELECT lower(hex(randomblob(16)))", [], |x| x.get(0))
+        .map_err(|_| failed())?;
+    let map = serde_json::json!({"headerRow":request.header_row,"columns":request.columns,"positiveValue":request.positive_value,"returnValue":request.return_value,"cancelValue":request.cancel_value,"rowKind":request.row_kind});
+    let now = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+    tx.execute(
+        &format!(
+            "INSERT INTO import_profiles(id,name,kind,version,mapping_json,created_at_utc)
+      VALUES(?1,?2,?3,1,?4,{now})"
+        ),
+        params![
+            profile_id,
+            format!("{}:{}:{}", request.kind, request.distributor_id, profile_id),
+            request.kind,
+            map.to_string()
+        ],
+    )
+    .map_err(|_| failed())?;
     tx.execute(&format!("INSERT OR IGNORE INTO imported_file_archives(sha256,original_name,file_bytes,saved_at_utc) VALUES(?1,?2,?3,{now})"),
         params![c.sha,request.file_name,request.bytes]).map_err(|_|failed())?;
-    if let Some((old,_))=&c.previous {
-        tx.execute("UPDATE import_batches SET status='SUPERSEDED',active=0 WHERE id=?1 AND active=1",[old]).map_err(|_|failed())?;
+    if let Some((old, _)) = &c.previous {
+        tx.execute(
+            "UPDATE import_batches SET status='SUPERSEDED',active=0 WHERE id=?1 AND active=1",
+            [old],
+        )
+        .map_err(|_| failed())?;
     }
     tx.execute(&format!("INSERT INTO import_batches(id,kind,distributor_id,period_from,period_to,granularity,source_file_name,source_file_sha256,
         source_sheet,import_profile_id,status,active,supersedes_batch_id,total_rows,valid_rows,error_rows,imported_at_utc,committed_at_utc)
@@ -531,15 +848,18 @@ mod tests {
            VALUES('b','npp','NV01','e','2026-01-01');
         ").unwrap();
     }
-    #[test] fn preview_scoped_code_and_decimal_dates(){
-        let d=tempdir().unwrap();let db=AppDatabase::open(d.path()).unwrap();
-        let c=db.connection.lock().unwrap();setup(&c);
-        let checked=checked(&c,&request()).unwrap();
-        assert_eq!(checked.facts.len(),1);
-        assert_eq!(checked.facts[0].quantity,48_000_000);
-        assert_eq!(checked.facts[0].employee.as_deref(),Some("e"));
-        assert_eq!(date("01/10/2026").as_deref(),Some("2026-10-01"));
-        assert_eq!(date("46296").as_deref(),Some("2026-10-01"));
+    #[test]
+    fn preview_scoped_code_and_decimal_dates() {
+        let d = tempdir().unwrap();
+        let db = AppDatabase::open(d.path()).unwrap();
+        let c = db.connection.lock().unwrap();
+        setup(&c);
+        let checked = checked(&c, &request()).unwrap();
+        assert_eq!(checked.facts.len(), 1);
+        assert_eq!(checked.facts[0].quantity, 48_000_000);
+        assert_eq!(checked.facts[0].employee.as_deref(), Some("e"));
+        assert_eq!(date("01/10/2026").as_deref(), Some("2026-10-01"));
+        assert_eq!(date("46296").as_deref(), Some("2026-10-01"));
     }
     #[test] fn commit_is_atomic_idempotent_and_replaces_revision() {
         let dir=tempdir().unwrap();
@@ -601,13 +921,18 @@ mod tests {
         let amount:i64=c.query_row("SELECT net_amount_vnd FROM v_active_sales_out",[],|r|r.get(0)).unwrap();
         assert_eq!(amount,240000);
     }
-    #[test] fn missing_employee_remains_unassigned(){
-        let d=tempdir().unwrap();let db=AppDatabase::open(d.path()).unwrap();
-        let c=db.connection.lock().unwrap();setup(&c);
-        let mut r=request();r.bytes=b"date;sku;unit;qty;amount;doc;staff\n2026-10-01;0007;THUNG;1;10;INV1;0000\n".to_vec();
-        let result=checked(&c,&r).unwrap();
-        assert_eq!(result.unknown,1);
+    #[test]
+    fn missing_employee_remains_unassigned() {
+        let d = tempdir().unwrap();
+        let db = AppDatabase::open(d.path()).unwrap();
+        let c = db.connection.lock().unwrap();
+        setup(&c);
+        let mut r = request();
+        r.bytes =
+            b"date;sku;unit;qty;amount;doc;staff\n2026-10-01;0007;THUNG;1;10;INV1;0000\n".to_vec();
+        let result = checked(&c, &r).unwrap();
+        assert_eq!(result.unknown, 1);
         assert!(result.facts[0].employee.is_none());
-        assert!(result.issues.iter().any(|i|i.severity=="WARNING"));
+        assert!(result.issues.iter().any(|i| i.severity == "WARNING"));
     }
 }
