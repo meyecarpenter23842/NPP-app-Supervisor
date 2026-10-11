@@ -861,65 +861,109 @@ mod tests {
         assert_eq!(date("01/10/2026").as_deref(), Some("2026-10-01"));
         assert_eq!(date("46296").as_deref(), Some("2026-10-01"));
     }
-    #[test] fn commit_is_atomic_idempotent_and_replaces_revision() {
-        let dir=tempdir().unwrap();
-        let db=AppDatabase::open(dir.path()).unwrap();
-        db.create_operator("CI",crate::storage::OperatorRole::Asm).unwrap();
-        let c=db.connection.lock().unwrap();setup(&c);
-        let first=request();
-        let first_hash=digest(&first.bytes);
-        let saved=commit_with_conn(&c,first.clone(),first_hash.clone(),false).unwrap();
-        assert_eq!(saved.inserted,1);
+    #[test]
+    fn commit_is_atomic_idempotent_and_replaces_revision() {
+        let dir = tempdir().unwrap();
+        let db = AppDatabase::open(dir.path()).unwrap();
+        db.create_operator("CI", crate::storage::OperatorRole::Asm)
+            .unwrap();
+        let c = db.connection.lock().unwrap();
+        setup(&c);
+        let first = request();
+        let first_hash = digest(&first.bytes);
+        let saved = commit_with_conn(&c, first.clone(), first_hash.clone(), false).unwrap();
+        assert_eq!(saved.inserted, 1);
         assert!(!saved.replaced);
-        let reimport=commit_with_conn(&c,first.clone(),first_hash,false).unwrap();
+        let reimport = commit_with_conn(&c, first.clone(), first_hash, false).unwrap();
         assert!(reimport.already_imported);
-        assert_eq!(reimport.inserted,0);
-        let mut revised=first.clone();
-        revised.bytes=b"date;sku;unit;qty;amount;doc;staff\n2026-10-01;0007;THUNG;3;360000;INV1;NV01\n".to_vec();
-        let new_hash=digest(&revised.bytes);
-        assert!(commit_with_conn(&c,revised.clone(),new_hash.clone(),false).is_err());
-        let active:i64=c.query_row("SELECT count(*) FROM import_batches WHERE active=1",[],|r|r.get(0)).unwrap();
-        assert_eq!(active,1);
-        let replacement=commit_with_conn(&c,revised,new_hash,true).unwrap();
+        assert_eq!(reimport.inserted, 0);
+        let mut revised = first.clone();
+        revised.bytes =
+            b"date;sku;unit;qty;amount;doc;staff\n2026-10-01;0007;THUNG;3;360000;INV1;NV01\n"
+                .to_vec();
+        let new_hash = digest(&revised.bytes);
+        assert!(commit_with_conn(&c, revised.clone(), new_hash.clone(), false).is_err());
+        let active: i64 = c
+            .query_row(
+                "SELECT count(*) FROM import_batches WHERE active=1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(active, 1);
+        let replacement = commit_with_conn(&c, revised, new_hash, true).unwrap();
         assert!(replacement.replaced);
-        assert_eq!(replacement.inserted,1);
-        let amount:i64=c.query_row("SELECT net_amount_vnd FROM v_active_sales_out",[],|r|r.get(0)).unwrap();
-        assert_eq!(amount,360000);
-        let stored:i64=c.query_row("SELECT count(*) FROM sales_out_facts",[],|r|r.get(0)).unwrap();
-        assert_eq!(stored,2); // old revision remains for audit
-        let archived:i64=c.query_row("SELECT count(*) FROM imported_file_archives",[],|r|r.get(0)).unwrap();
-        assert_eq!(archived,2);
-        let old:i64=c.query_row("SELECT count(*) FROM import_batches WHERE status='SUPERSEDED' AND active=0",[],|r|r.get(0)).unwrap();
-        assert_eq!(old,1);
+        assert_eq!(replacement.inserted, 1);
+        let amount: i64 = c
+            .query_row("SELECT net_amount_vnd FROM v_active_sales_out", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(amount, 360000);
+        let stored: i64 = c
+            .query_row("SELECT count(*) FROM sales_out_facts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(stored, 2); // old revision remains for audit
+        let archived: i64 = c
+            .query_row("SELECT count(*) FROM imported_file_archives", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(archived, 2);
+        let old: i64 = c
+            .query_row(
+                "SELECT count(*) FROM import_batches WHERE status='SUPERSEDED' AND active=0",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(old, 1);
     }
-    #[test] fn any_error_blocks_complete_batch_even_after_issue_limit(){
-        let d=tempdir().unwrap();let db=AppDatabase::open(d.path()).unwrap();
-        let c=db.connection.lock().unwrap();setup(&c);
-        let mut request=request();
-        let mut text=String::from("date;sku;unit;qty;amount;doc;staff\n");
-        for i in 0..300{text.push_str(&format!("2026-10-01;UNKNOWN;THUNG;1;1;DOC{i};NV01\n"));}
+    #[test]
+    fn any_error_blocks_complete_batch_even_after_issue_limit() {
+        let d = tempdir().unwrap();
+        let db = AppDatabase::open(d.path()).unwrap();
+        let c = db.connection.lock().unwrap();
+        setup(&c);
+        let mut request = request();
+        let mut text = String::from("date;sku;unit;qty;amount;doc;staff\n");
+        for i in 0..300 {
+            text.push_str(&format!("2026-10-01;UNKNOWN;THUNG;1;1;DOC{i};NV01\n"));
+        }
         text.push_str("2026-10-01;0007;THUNG;1;1;OK;NV01\n");
-        request.bytes=text.into_bytes();
-        let checked=checked(&c,&request).unwrap();
-        assert_eq!(checked.error_rows,300);
-        assert!(checked.issues.len()<=250);
-        assert_eq!(checked.facts.len(),1);
-        assert!(commit_with_conn(&c,request.clone(),digest(&request.bytes),false).is_err());
-        let count:i64=c.query_row("SELECT count(*) FROM import_batches",[],|r|r.get(0)).unwrap();
-        assert_eq!(count,0);
+        request.bytes = text.into_bytes();
+        let checked = checked(&c, &request).unwrap();
+        assert_eq!(checked.error_rows, 300);
+        assert!(checked.issues.len() <= 250);
+        assert_eq!(checked.facts.len(), 1);
+        assert!(commit_with_conn(&c, request.clone(), digest(&request.bytes), false).is_err());
+        let count: i64 = c
+            .query_row("SELECT count(*) FROM import_batches", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
     }
-    #[test] fn invalid_replacement_does_not_change_active_data(){
-        let d=tempdir().unwrap();let db=AppDatabase::open(d.path()).unwrap();
-        db.create_operator("CI",crate::storage::OperatorRole::Asm).unwrap();
-        let c=db.connection.lock().unwrap();setup(&c);
-        let first=request();
-        let hash=digest(&first.bytes);
-        commit_with_conn(&c,first,hash,true).unwrap();
-        let mut broken=request();
-        broken.bytes=b"date;sku;unit;qty;amount;doc;staff\n2026-10-01;MISSING;THUNG;1;1;INV1;NV01\n".to_vec();
-        assert!(commit_with_conn(&c,broken.clone(),digest(&broken.bytes),true).is_err());
-        let amount:i64=c.query_row("SELECT net_amount_vnd FROM v_active_sales_out",[],|r|r.get(0)).unwrap();
-        assert_eq!(amount,240000);
+    #[test]
+    fn invalid_replacement_does_not_change_active_data() {
+        let d = tempdir().unwrap();
+        let db = AppDatabase::open(d.path()).unwrap();
+        db.create_operator("CI", crate::storage::OperatorRole::Asm)
+            .unwrap();
+        let c = db.connection.lock().unwrap();
+        setup(&c);
+        let first = request();
+        let hash = digest(&first.bytes);
+        commit_with_conn(&c, first, hash, true).unwrap();
+        let mut broken = request();
+        broken.bytes =
+            b"date;sku;unit;qty;amount;doc;staff\n2026-10-01;MISSING;THUNG;1;1;INV1;NV01\n"
+                .to_vec();
+        assert!(commit_with_conn(&c, broken.clone(), digest(&broken.bytes), true).is_err());
+        let amount: i64 = c
+            .query_row("SELECT net_amount_vnd FROM v_active_sales_out", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(amount, 240000);
     }
     #[test]
     fn missing_employee_remains_unassigned() {
