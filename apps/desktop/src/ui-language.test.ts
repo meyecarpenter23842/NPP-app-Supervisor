@@ -17,7 +17,7 @@ describe('Business language for Sales, SUP and ASM (Issue #21)', () => {
     expect(businessPages).toHaveLength(10);
     const imports = businessPages.find((p) => p.id === 'imports');
     expect(imports?.title).toBe('Nhập dữ liệu');
-    expect(imports?.views).toContain('Chọn cột Excel');
+    expect(imports?.views).toEqual(['Nhập Excel', 'Lịch sử nhập']);
     expect(businessPages.find((p) => p.id === 'sales-out')?.views).toContain('Chưa xác định nhân viên');
     expect(businessPages.find((p) => p.id === 'inventory')?.views).toContain('Kiểm tra chênh lệch');
     expect(businessPages.find((p) => p.id === 'team')?.views).toContain('Sơ đồ quản lý');

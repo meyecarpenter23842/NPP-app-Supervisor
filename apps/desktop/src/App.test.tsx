@@ -26,7 +26,8 @@ describe('M1.5 sidebar navigation and business screens', () => {
 
   it('keeps meaningful accessible sub-navigation per business page', () => {
     for (const page of businessPages) {
-      expect(page.views.length).toBeGreaterThanOrEqual(3);
+      if (page.id === 'imports') expect(page.views).toEqual(['Nhập Excel', 'Lịch sử nhập']);
+      else expect(page.views.length).toBeGreaterThanOrEqual(3);
       expect(getDefaultView(page.id)).toBe(page.views[0]);
       for (const view of page.views) expect(getValidView(page.id, view)).toBe(view);
       expect(getValidView(page.id, 'không có')).toBe(page.views[0]);
