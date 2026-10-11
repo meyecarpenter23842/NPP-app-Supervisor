@@ -500,10 +500,22 @@ mod tests {
     #[test]
     fn reads_xlsx_sheet_and_preserves_text_code_with_zero_prefix() {
         let zip = zip_fixture(&[
-            ("xl/workbook.xml", r#"<workbook><sheets><sheet name="Bán ra" r:id="rId1"/></sheets></workbook>"#),
-            ("xl/_rels/workbook.xml.rels", r#"<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>"#),
-            ("xl/sharedStrings.xml", r#"<sst><si><t>Mã hàng</t></si><si><t>0007</t></si></sst>"#),
-            ("xl/worksheets/sheet1.xml", r#"<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row><row r="2"><c r="A2" t="s"><v>1</v></c></row></sheetData></worksheet>"#),
+            (
+                "xl/workbook.xml",
+                r#"<workbook><sheets><sheet name="Bán ra" r:id="rId1"/></sheets></workbook>"#,
+            ),
+            (
+                "xl/_rels/workbook.xml.rels",
+                r#"<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>"#,
+            ),
+            (
+                "xl/sharedStrings.xml",
+                r#"<sst><si><t>Mã hàng</t></si><si><t>0007</t></si></sst>"#,
+            ),
+            (
+                "xl/worksheets/sheet1.xml",
+                r#"<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row><row r="2"><c r="A2" t="s"><v>1</v></c></row></sheetData></worksheet>"#,
+            ),
         ]);
         let result = parse("bán-ra.xlsx", &zip).expect("valid workbook");
         assert_eq!(result.len(), 1);
@@ -511,5 +523,4 @@ mod tests {
         assert_eq!(result[0].rows[0].1[0], "Mã hàng");
         assert_eq!(result[0].rows[1].1[0], "0007");
     }
-
 }
