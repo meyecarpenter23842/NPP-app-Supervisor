@@ -18,7 +18,7 @@ describe('allowlisted typed desktop IPC', () => {
     ]);
     expect(Object.keys(desktopApi)).toEqual(['health', 'getOperator', 'createOperator', 'updateOperator',
       'listMasterData', 'createMasterItem', 'renameMasterItem', 'setMasterActive', 'createMasterLink', 'endMasterLink',
-      'inspectImportFile', 'previewImport', 'commitImport', 'listImportHistory']);
+      'inspectImportFile', 'previewImport', 'commitImport', 'listImportHistory', 'getImportMappingProfile', 'saveImportMappingProfile']);
   });
 
   it('normalizes structured Rust errors without exposing internals', async () => {
@@ -49,6 +49,19 @@ describe('allowlisted typed desktop IPC', () => {
     await desktopApi.commitImport(request, 'abc', true);
     expect(invokeMock).toHaveBeenCalledWith('commit_import',
       { request, expectedSha256: 'abc', replaceExisting: true });
+  });
+  it('reads and persists per-NPP source column templates using an allowlisted command', async () => {
+    const fields = ['Ngày GH', 'SKU', 'SL bán'];
+    invokeMock.mockResolvedValueOnce({ columns: { date: '@col:0', sku: '@col:1' }, rowKind: 'DELIVERED' });
+    await desktopApi.getImportMappingProfile('SALES_OUT', 'npp1', fields);
+    expect(invokeMock).toHaveBeenCalledWith('get_import_mapping_profile',
+      { kind: 'SALES_OUT', distributorId: 'npp1', headers: fields });
+    const req = { kind: 'SALES_OUT' as const, distributorId: 'npp1', headers: fields,
+      columns: { date: '@col:0', sku: '@col:1' }, rowKind: 'DELIVERED' as const,
+      positiveValue: null, returnValue: null, cancelValue: null };
+    invokeMock.mockResolvedValueOnce(null);
+    await desktopApi.saveImportMappingProfile(req);
+    expect(invokeMock).toHaveBeenCalledWith('save_import_mapping_profile', { request: req });
   });
   it('maps unknown/native errors to a sanitized connection problem', () => {
     const error = normalizeIpcError(new Error('C:\\secret\\db.sqlite'));
