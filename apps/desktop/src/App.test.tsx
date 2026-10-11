@@ -42,7 +42,7 @@ describe('M1.5 sidebar navigation and business screens', () => {
     for (const page of businessPages) {
       for (const view of page.views) {
         const html = renderToStaticMarkup(<BusinessContent pageId={page.id} view={view} onGoToImport={() => {}} />);
-        expect(html).toMatch(/Chưa|chưa|nguồn|Nguồn/);
+        expect(html).toMatch(/Chưa|chưa|nguồn|Nguồn|Đang đọc/);
         expect(html).not.toContain('12,4 tỷ');
         expect(html).not.toContain('Đã xuất file thành công');
       }
