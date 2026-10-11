@@ -29,6 +29,8 @@ pub fn run() {
             import_data::preview_import,
             import_data::commit_import,
             import_data::list_import_history,
+            import_data::get_import_mapping_profile,
+            import_data::save_import_mapping_profile,
         ])
         .run(tauri::generate_context!())
         .expect("unable to start Sales Supervisor");

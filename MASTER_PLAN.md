@@ -49,7 +49,7 @@ Ví dụ operator ASM quản lý SUP A → SALES A1, A2 và SUP B → SALES B1; 
 6. Staging → validation → atomic commit → activate batch; import phiên bản điều chỉnh supersede batch cũ có lịch sử. Không cộng trùng, không xóa trace gốc.
 7. Báo cáo nào cũng cần trạng thái dữ liệu (VALID/PARTIAL/MISSING/STALE/CONFLICT), kỳ và batch nguồn. Export Excel ghi filters, kỳ, thời điểm, version và nguồn.
 
-## 6. Database/migrations — design targets (chưa đổi schema ở PR Master Plan)
+**M2 cập nhật theo quyết định owner 2026-10-11:** Chọn trường chuẩn trên đầu *từng cột Excel*, không trên biểu mẫu tách rời; hỗ trợ cột nguồn trùng tên bằng vị trí; lưu mẫu chọn cột theo loại dữ liệu/NPP/cấu trúc file, hiển thị cột không sử dụng. Code scope và bộ trường hiện đã/đang chốt trong [M2 Column Mapping Fix](docs/M2_COLUMN_MAPPING_FIX.md); không tự tuyên bố đã nhập được NPP/SKU/nhân viên/XNT/KPI/điểm bán khi backend chưa có. Mọi loại phải có canonical contract được duyệt và tests trước khi triển khai.\n\n## 6. Database/migrations — design targets (chưa đổi schema ở PR Master Plan)
 - Giữ các thực thể hiện có: distributors, products, aliases, employees, assignments, import_batches/issues, sales_in_facts, sales_out_facts, inventory_period_facts, target_facts, audit_events, report views.
 - **Phải thay đổi** app_profiles thành singleton local_operator (hoặc giới hạn tối đa 1 bản ghi), role gồm SALES/SUP/ASM; tránh table users, local login/password.
 - **Phải bổ sung** employee_hierarchy_assignments(effective_from, effective_to, employee_id, manager_employee_id), với constraint chống vòng quản lý và khoảng hiệu lực xung đột. employee_distributor_assignments giữ hiệu lực theo NPP.
