@@ -16,6 +16,7 @@ const SCHEMA_002: &str = include_str!("../../../../database/migrations/002_local
 const SCHEMA_003: &str = include_str!("../../../../database/migrations/003_master_data.sql");
 const SCHEMA_004: &str = include_str!("../../../../database/migrations/004_import_archives.sql");
 const SCHEMA_005: &str = include_str!("../../../../database/migrations/005_catalog_prices.sql");
+const SCHEMA_006: &str = include_str!("../../../../database/migrations/006_catalog_import_history.sql");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OperatorRole {
@@ -259,6 +260,7 @@ fn migrate(conn: &Connection, app_data: &Path) -> Result<()> {
             "003" => sha256(SCHEMA_003),
             "004" => sha256(SCHEMA_004),
             "005" => sha256(SCHEMA_005),
+            "006" => sha256(SCHEMA_006),
             _ => return Err(format!("unsupported newer migration: {v}").into()),
         };
         if *digest != expected {
@@ -340,6 +342,15 @@ fn migrate(conn: &Connection, app_data: &Path) -> Result<()> {
         if violations != 0 {
             return Err(format!("{violations} foreign-key violations").into());
         }
+        tx.commit()?;
+    }
+    if !versions.iter().any(|(v, _)| v == "006") {
+        if !new_database && !backup_made { snapshot(conn, app_data)?; }
+        let tx=conn.unchecked_transaction()?;
+        tx.execute_batch(SCHEMA_006)?;
+        write_ledger(&tx,"006",SCHEMA_006)?;
+        let violations:i64=tx.query_row("SELECT count(*) FROM pragma_foreign_key_check",[],|r|r.get(0))?;
+        if violations!=0 {return Err(format!("{violations} foreign-key violations").into());}
         tx.commit()?;
     }
     check_integrity(conn)?;
