@@ -118,3 +118,8 @@ Chi tiết milestone/checklist/acceptance trong docs/IMPLEMENTATION_PLAN.md.
 - ĐÃ XÁC MINH: PR #1 merged tại 77b5f705; SQL/TS baseline thiếu SALES/singleton/hierarchy; Key Manager main 97c1617 hỗ trợ Public License API và external R2 publish (chưa chứng minh tương thích Tauri updater).
 - CHƯA XÁC MINH: Supervisor executable/CI Windows, license API môi trường thực, Key Manager release profile đã lưu, quyền R2/upload/download, manifest+signing updater, installer và release readiness. Bucket/base URL do owner cung cấp, chưa test.
 - KHÔNG THỰC HIỆN TRONG PR KẾ HOẠCH: mutation DB khách hàng, build production, phát hành R2, merge main, chỉnh file local.
+
+
+## UI lọc kỳ/NPP — kết luận audit Issue #32 (2026-10-11)
+
+Thanh lọc toàn cục Kỳ dữ liệu/Nhà phân phối trên Workspace cũ chỉ gồm `select disabled` và nhãn trạng thái cố định, **chưa đọc dữ liệu SQLite hay có tác dụng lọc**. Theo quyết định owner, loại bỏ thanh lọc và nhãn nguồn/kỳ giả cho đến khi truy vấn báo cáo có hợp đồng lọc thật. Giữ các bộ lọc/tìm kiếm **đã hoạt động** trong danh mục, nhập Excel và màn hình nghiệp vụ tương ứng. Thanh lọc báo cáo tương lai chỉ bật khi có dữ liệu nguồn/kỳ thật và xử lý lựa chọn thay đổi kết quả truy vấn; không hiển thị điều khiển vô hiệu trang trí. Không sửa backend, schema, migration hoặc báo cáo trong Issue #32.

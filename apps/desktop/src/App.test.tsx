@@ -60,12 +60,16 @@ describe('M1.5 sidebar navigation and business screens', () => {
 
   it('keeps operator editing in settings and marks unrelated M4 capabilities unsupported', () => {
     const src = renderToStaticMarkup(<Workspace operator={operator} onUpdate={async () => {}} />);
-    expect(src).toContain('Chưa có dữ liệu để lọc');
+    expect(src).not.toContain('Bộ lọc báo cáo');
+    expect(src).not.toContain('Chưa có kỳ dữ liệu');
+    expect(src).not.toContain('Chưa có nguồn');
+    expect(src).not.toContain('Chưa có dữ liệu để lọc');
+    expect(src).not.toContain('aria-label="Kỳ dữ liệu"');
+    expect(src).not.toContain('aria-label="Nhà phân phối"');
     expect(src).not.toContain('QUẢN LÝ PHÂN PHỐI /');
     expect(src).toContain('role="tablist"');
     expect(src).toContain('role="tabpanel"');
     expect(src).toContain('aria-selected="true"');
-    expect(src).toContain('disabled=""');
   });
 });
 
@@ -79,18 +83,18 @@ describe('M1.6 compact desktop visual contract', () => {
     expect(styles).toMatch(/\.nav-item:focus-visible\s*\{[^}]*outline:\s*2px/);
   });
 
-  it('keeps the header and period/NPP filters compact with a narrow-window fallback', () => {
+  it('keeps a compact header and narrow-window fallback without dummy filters', () => {
     expect(styles).toMatch(/\.page-header\s*\{[^}]*margin-bottom:\s*11px/);
-    expect(styles).toMatch(/\.page-toolbar\s*\{[^}]*flex-wrap:\s*nowrap/);
-    expect(styles).toMatch(/\.filter-field\s*\{[^}]*display:\s*flex/);
+    expect(styles).not.toMatch(/\.page-toolbar\s*\{/);
+    expect(styles).not.toMatch(/\.filter-field\s*\{/);
     expect(styles).toMatch(/@media\s*\(max-width:\s*540px\)/);
   });
 
   it('preserves actual missing-data and unsupported messages without fictional data', () => {
     const html = renderToStaticMarkup(<Workspace operator={operator} onUpdate={async () => {}} />);
-    expect(html).toContain('Chưa có dữ liệu để lọc');
+    expect(html).not.toContain('Chưa có dữ liệu để lọc');
     expect(html).toContain('role="tablist"');
-    expect(html).toContain('disabled=""');
+    expect(html).not.toContain('aria-label="Bộ lọc báo cáo"');
     expect(html).not.toContain('12,4 tỷ');
   });
 });
