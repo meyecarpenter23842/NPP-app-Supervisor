@@ -18,6 +18,7 @@ describe('allowlisted typed desktop IPC', () => {
     ]);
     expect(Object.keys(desktopApi)).toEqual(['health', 'getOperator', 'createOperator', 'updateOperator',
       'listCatalog', 'createCatalogOption', 'assignFamilyCatalog', 'createPriceList', 'createPriceItem', 'closePriceItem', 'resolveCatalogSku',
+      'previewCatalogImport', 'commitCatalogImport', 'listCatalogImportHistory',
       'listMasterData', 'createMasterItem', 'renameMasterItem', 'setMasterActive', 'createMasterLink', 'endMasterLink',
       'inspectImportFile', 'previewImport', 'commitImport', 'listImportHistory', 'getImportMappingProfile', 'saveImportMappingProfile']);
   });
@@ -34,6 +35,18 @@ describe('allowlisted typed desktop IPC', () => {
     invokeMock.mockResolvedValueOnce({ id: 'p1' });
     await desktopApi.createPriceList(list);
     expect(invokeMock).toHaveBeenCalledWith('create_price_list', { request: list });
+  });
+
+  it('only confirms a catalog Excel import against the preview fingerprint', async () => {
+    const request = { fileName: 'price.csv', bytes: [48, 48, 55], sheetName: 'CSV', headerRow: 1,
+      kind: 'PRICE' as const, columns: { skuCode: 0, amountVnd: 1 }, distributorId: 'n1',
+      priceListId: 'price-list' };
+    invokeMock.mockResolvedValueOnce({ fingerprint: 'checked-hash', totalRows: 1, errorRows: 0 });
+    const preview = await desktopApi.previewCatalogImport(request);
+    expect(invokeMock).toHaveBeenCalledWith('preview_catalog_import', { request });
+    invokeMock.mockResolvedValueOnce({ insertedRows: 1, alreadyImported: false });
+    await desktopApi.commitCatalogImport(request, preview.fingerprint);
+    expect(invokeMock).toHaveBeenCalledWith('commit_catalog_import', { request, expectedFingerprint: 'checked-hash' });
   });
 
   it('normalizes structured Rust errors without exposing internals', async () => {
