@@ -1,6 +1,22 @@
-# KẾ HOẠCH THỰC THI — Sales SUP/ASM Desktop (M0 CONTRACT REVIEW)
-**Liên kết:** MASTER_PLAN.md · docs/M0_CONTRACTS.md · Issue #2 | **Giai đoạn:** M0 planning; Master Plan PR #1 đã merged, chưa cấp phép bắt đầu lập trình.
+# KẾ HOẠCH THỰC THI — Sales SUP/ASM Desktop (baseline M0 và lộ trình workspace 2026-10-11)
+**Liên kết:** MASTER_PLAN.md · docs/M0_CONTRACTS.md · docs/UNIFIED_MANUAL_EXCEL_WORKSPACES.md · Issue #19 | **Trạng thái:** M0–M5 bên dưới là baseline lịch sử; roadmap mới ở đầu tài liệu đang chờ owner duyệt contracts, không cấp phép code.
 **Nguyên tắc:** Mỗi implementation Issue mở sau khi Master Plan PR được owner review/chốt; owner duyệt merge từng PR; GitHub main là nguồn chuẩn; local chỉ pull sau merge.
+
+## Roadmap cập nhật 2026-10-11 — Workspace nghiệp vụ và hai phương thức nhập
+
+**Trạng thái:** proposed technical sequencing; owner đã chốt bố cục tập trung + nguyên tắc thủ công/Excel, **chưa chốt contract/Issue code**. Ưu tiên [thiết kế toàn app](UNIFIED_MANUAL_EXCEL_WORKSPACES.md) và [Master Plan](../MASTER_PLAN.md) khi lập issue mới. Các milestone M0–M5 dưới đây phản ánh **kế hoạch lịch sử**, checkbox cũ không phải live trạng thái.
+
+| Nhóm theo thứ tự phụ thuộc | Nhiệm vụ sau khi owner duyệt chi tiết | Gate kết quả |
+| --- | --- | --- |
+| P0 — Contract dùng chung | Định nghĩa canonical/ID, hai nguồn `MANUAL/FILE`, audit revision, chống trùng giao dịch, scope NPP/ngày, chính sách giá và cấu trúc file thật | Owner chốt nguồn dữ liệu + rule cụ thể; chưa code |
+| P1 — Catalog + giá | SQLite additive migration mới sau 004; danh mục nhóm/nhãn/đơn vị, NPP price-list/type/item history, Rust typed price+SKU read/validation; bảo toàn ID fact | SQLite upgrade/backup/FK, unit tests đúng NPP, giá trùng/ngày/đơn vị |
+| P2 — Sản phẩm & SKU | Bố cục owner duyệt: Thiết lập nhanh 6 phần, danh sách, mã NPP & bảng giá, import Excel danh mục/giá 1.446 dòng và đối chiếu | CRUD & import atomic/idempotent, không thiếu lịch sử, UI test |
+| P3 — NPP + nhân sự | Workspace mỗi nghiệp vụ tập trung, nhập tay + danh mục Excel + lịch sử theo ngày | NPP/tuyến & SALES/SUP/ASM không bị sai khi trùng mã/đổi quản lý |
+| P4 — Sales In/Out | Tạo/sửa ghi nhận thực thủ công, cùng validator/facts nguồn Excel; preview tra tên/giá theo dữ liệu chuẩn chỉ để tham khảo | Không cộng trùng, tính signed returns và NVKD chưa gán đúng |
+| P5 — XNT/Target | Snapshot kho và chỉ tiêu nguồn nhập tay/file; tổng quan/KPI/báo cáo chỉ tính từ nguồn | Đối chiếu kỳ, target scope, dữ liệu thiếu rõ, không KPI giả |
+| P6 — QA & phát hành riêng | 10 tab UI QA 1366×768/1920×1080, test source lineage/migration, Windows smoke, license/update chỉ ở milestone đúng | CI xanh, owner duyệt merge; production/release phê duyệt riêng |
+
+**Next issue khi đủ gate:** bắt đầu từ **contract/schema danh mục sản phẩm và bảng giá theo NPP + truy vấn tra cứu**, rồi **workspace Sản phẩm & SKU + nhập Excel danh mục/giá**. Không mở Issue triển khai trước khi PR plan được owner duyệt. PR #33 dọn bộ lọc giả đang mở được giải quyết độc lập, không trộn vào đây.
 
 ## Milestone 0 — Approve architecture (documentation-only)
 **Đầu vào:** Repo main hiện hữu, docs/MVP_SPEC.md, SQL+contracts hiện hữu, KM repo & tài liệu license/release.

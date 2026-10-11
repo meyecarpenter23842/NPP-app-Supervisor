@@ -1,7 +1,7 @@
 # M2.1 — Đề xuất thiết kế Master Data đa NPP (chờ owner duyệt)
 
 **Ngày:** 2026-10-10  
-**Trạng thái:** DRAFT / CHƯA CHỐT — chưa cho phép tạo Issue code, sửa migration hoặc triển khai.  
+**Trạng thái:** Tài liệu thiết kế M2.1 **lịch sử**, soạn trước khi triển khai; các mô tả `chưa có migration 003/CRUD` bên dưới đã cũ tại main@3a1aa0b. Đọc [thiết kế thống nhất 2026-10-11](UNIFIED_MANUAL_EXCEL_WORKSPACES.md) và [Master Plan](../MASTER_PLAN.md) để lấy quyết định bố cục mới. M2.1 CRUD đã có trong source, không đồng nghĩa nhập danh mục/bảng giá và nhập tay Sales đã triển khai. Không tự code khi chưa có Issue/contract owner duyệt.  
 **Nguồn:** [MASTER_PLAN.md](../MASTER_PLAN.md), [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [NPP_PLATFORM_REFERENCE.md](NPP_PLATFORM_REFERENCE.md), SQLite `database/001_initial_schema.sql` + migration `002_local_operator.sql`.
 
 ## 1. Mục tiêu và ranh giới

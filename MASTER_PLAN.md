@@ -1,6 +1,27 @@
 # MASTER PLAN — Sales SUP/ASM Desktop (FMCG)
-**Trạng thái:** Architecture baseline đã được owner duyệt và merge tại PR #1; hợp đồng M0 bổ sung vẫn ở trạng thái review, chưa cho phép code/release.
-**Ngày:** 2026-10-10 | **Repository:** meyecarpenter23842/NPP-app-Supervisor | **Mốc main đã audit:** 77b5f7054c55721140a8c481930ab5cc0399e2be (PR #1 merged)
+**Trạng thái:** Architecture baseline đã được owner duyệt; đề xuất tái cấu trúc workspace 2026-10-11 đang review ở PR tài liệu. Owner đã duyệt nguyên tắc và bố cục, chưa duyệt contract kỹ thuật/Issue code.
+**Ngày cập nhật plan:** 2026-10-11 | **Repository:** meyecarpenter23842/NPP-app-Supervisor | **Main tại audit:** 3a1aa0b432d2fe1530925253aba00f7e5ac6e564 (PR #35). **Mốc PR #1:** 77b5f705 (lịch sử).
+
+
+## 0A. Quyết định tái cấu trúc workspace toàn ứng dụng (owner 2026-10-11)
+
+> **Nguồn thiết kế cần ưu tiên cho các Issue kế tiếp:** [docs/UNIFIED_MANUAL_EXCEL_WORKSPACES.md](docs/UNIFIED_MANUAL_EXCEL_WORKSPACES.md). Các phần M0–M2 được ghi trước đây là baseline/lịch sử tại thời điểm viết; nơi nào mâu thuẫn về trạng thái hiện tại hoặc điều hướng thì dùng quyết định owner mới này và mã nguồn main mới nhất. **Không** coi tài liệu này là bằng chứng tính năng đã triển khai hoặc giấy phép merge.
+
+**Đã được owner duyệt ở mức nguyên tắc/bố cục:**
+
+- **Hai cách ghi dữ liệu vào cùng SQLite canonical:** nhập **thủ công** và nhập **Excel/CSV**, dùng chung validation/backend/ID/source history, không dựng hai hệ thống tách biệt. Một mục nghiệp vụ quản lý việc tạo/sửa, nhập file, danh sách và lịch sử của chính đối tượng đó; có bộ nhập Excel nền dùng chung và trung tâm theo dõi lần nhập, không duplicate chức năng.
+- **Giữ 10 tab chính** như `pageModel.ts`, chỉ đổi nhãn `Phân tích SKU` thành **Sản phẩm & SKU**. Không thêm tab chính và không đưa Cài đặt vào sidebar. Tổng quan/Báo cáo chỉ quản lý góc nhìn và kết quả tính từ dữ liệu, không nhập tay doanh thu/KPI thực hiện.
+- **Sản phẩm & SKU** có 5 view: **Thiết lập nhanh / Danh sách sản phẩm / Mã NPP & bảng giá / Nhập Excel / Phân tích**. Trong **Thiết lập nhanh**: chọn/tạo sản phẩm chuẩn → SKU → đơn vị/quy đổi/mã vạch → mã/đơn vị NPP theo ngày → bảng giá NPP theo loại/ngày → kiểm tra và lưu; nhóm hàng, nhãn hàng, đơn vị và giá không rải nơi khác. Cả thủ công và nhập file danh mục/bảng giá (ví dụ file khoảng 1.446 dòng) quản lý ngay tại đây.
+- **Nhà phân phối** quản lý hồ sơ/khu vực/tuyến và nhập Excel ở một nơi. **Đội ngũ kinh doanh** quản lý nhân viên SALES/SUP/ASM, manager lịch sử, mã từng NPP, phân công và nhập Excel tại một nơi. Cả hai là business subjects, không tạo tài khoản.
+- **Sales In/Out** hỗ trợ file và ghi thủ công các giao dịch đã phát sinh; **XNT** hỗ trợ báo cáo/snapshot nguồn chứ không tạo phiếu kho ERP; **Chỉ tiêu** nhận giao chỉ tiêu thủ công/file, **KPI thực hiện và báo cáo** được tính từ các fact đã xác nhận. **Nhập dữ liệu** tiếp tục quản lý lịch sử nguồn và luồng Sales In/Out, không tạo mục danh mục thứ hai.
+- Tra `mã NPP + đơn vị + ngày` → canonical SKU và tên sản phẩm; giá chỉ được gợi ý khi tra đúng **NPP/SKU/loại giá/đơn vị/ngày**, có nguồn rõ và không mơ hồ. **Đơn giá tham khảo KHÔNG phải Thành tiền/Doanh thu**; không tạo Sales In/Out từ bảng giá không có chứng từ hoặc dữ liệu giao dịch.
+- Bảo toàn `products.id`, toàn bộ facts và migrations `001–004`; tiếp tục additive forward-only migration mới sau khi duyệt contract. Excel và thủ công chống trùng theo nghiệp vụ, lịch sử/audit, không báo thành công giả.
+
+**Đã xác minh mã nguồn tại mốc kế hoạch:** Supervisor `main@3a1aa0b` (PR #35 đã merge: xem trước Sales In/Out không bị khóa vô lý; `Bảng giá/Danh mục` hiện **chỉ xem**; có master CRUD, chưa có bảng giá NPP và import danh mục). PR #33 là fix toolbar lọc giả riêng, còn mở. NPP-Platform `main@cdfc7c7e` tham khảo sản phẩm/SKU/giá, không phải backend Supervisor.
+
+**Chưa chốt để code:** danh sách và ưu tiên loại giá, sửa phiên bản fact/chứng từ thủ công, quy tắc chống trùng Excel↔thủ công, trường/chứng từ theo file NPP thật, hợp đồng migration/pricing. Không biến các phương án kỹ thuật trong tài liệu liên kết thành quyết định owner đã duyệt.
+
+**Thứ tự đề xuất:** (1) review/duyệt plan và contract; (2) **nền danh mục + bảng giá + tra tên/giá**; (3) **Sản phẩm & SKU: Thiết lập nhanh + nhập Excel hàng loạt**; (4) NPP & đội ngũ tập trung; (5) Sales In/Out thủ công dùng chung engine; (6) XNT/Chỉ tiêu thủ công + Excel; (7) báo cáo, QA Windows 10 tab. Mỗi phần Issue/PR nhỏ, CI xanh và owner duyệt riêng mới merge. Không code, deploy, migrate hay tạo Issue triển khai trong PR docs này.
 
 ## 0. Quyền ưu tiên & phạm vi quyết định
 - Master Plan này là quyết định nguồn ưu tiên cao nhất cho thiết kế ứng dụng SUP/ASM. docs/MVP_SPEC.md và database/001_initial_schema.sql là baseline hiện hữu, **chưa được coi là đã cập nhật** để đáp ứng mọi quyết định ở đây.
@@ -114,7 +135,7 @@ Chi tiết milestone/checklist/acceptance trong docs/IMPLEMENTATION_PLAN.md.
 - **M0 CHƯA XÁC MINH:** mapping Excel thực tế; license environment/app_id/signing public keys; prefix/config R2 đã lưu; Tauri updater manifest/signature, release output/build command và thử nghiệm end-to-end. Các hạng mục này vẫn là gate cho Issue phụ thuộc; không đánh dấu DONE chỉ bằng PR tài liệu.
 - **Không code app, tạo implementation Issue, merge hoặc publish R2** trước các phê duyệt tương ứng.
 
-## 13. Trạng thái xác minh (2026-10-10)
+## 13. Trạng thái xác minh lịch sử tại 2026-10-10 (KHÔNG phải live status)
 - ĐÃ XÁC MINH: PR #1 merged tại 77b5f705; SQL/TS baseline thiếu SALES/singleton/hierarchy; Key Manager main 97c1617 hỗ trợ Public License API và external R2 publish (chưa chứng minh tương thích Tauri updater).
 - CHƯA XÁC MINH: Supervisor executable/CI Windows, license API môi trường thực, Key Manager release profile đã lưu, quyền R2/upload/download, manifest+signing updater, installer và release readiness. Bucket/base URL do owner cung cấp, chưa test.
 - KHÔNG THỰC HIỆN TRONG PR KẾ HOẠCH: mutation DB khách hàng, build production, phát hành R2, merge main, chỉnh file local.
