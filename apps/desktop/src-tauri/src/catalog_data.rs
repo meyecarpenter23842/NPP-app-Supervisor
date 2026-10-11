@@ -342,8 +342,13 @@ pub fn create_product_family(
 ) -> Result<CatalogMutation> {
     let code = clean(&request.code, 96)?.to_ascii_uppercase();
     let name = clean(&request.name, 256)?;
-    let conn = db.connection.lock().map_err(|_| CatalogError::unavailable())?;
-    let tx = conn.unchecked_transaction().map_err(CatalogError::storage)?;
+    let conn = db
+        .connection
+        .lock()
+        .map_err(|_| CatalogError::unavailable())?;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(CatalogError::storage)?;
     let id = new_id(&tx)?;
     tx.execute(
         "INSERT INTO product_families(id,code,name,category_id,brand_id,category,brand)
