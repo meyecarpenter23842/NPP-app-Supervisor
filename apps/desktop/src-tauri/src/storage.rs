@@ -393,7 +393,7 @@ mod tests {
                 assert_eq!(
                     c.query_row("SELECT count(*) FROM schema_migrations", [], |r| r
                         .get::<_, i64>(0))?,
-                    5
+                    6
                 );
                 assert!(c.execute(
                     "INSERT INTO local_operator(id,display_name,role,created_at_utc) VALUES(2,'bad','SALES','2026')",[]
@@ -488,7 +488,7 @@ mod tests {
         assert_eq!(source_category_count, 1);
         let version_count: i64 =
             c.query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))?;
-        assert_eq!(version_count, 5);
+        assert_eq!(version_count, 6);
         ensure_foreign_keys(&c)?;
         assert!(d.path().join("backups").read_dir()?.next().is_some());
         Ok(())
