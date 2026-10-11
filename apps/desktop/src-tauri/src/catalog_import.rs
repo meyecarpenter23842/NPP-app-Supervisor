@@ -768,7 +768,8 @@ mod tests {
             c.execute(
                 "INSERT INTO products(id,sku_code) VALUES(?1,?2)",
                 params![id, sku],
-            ).unwrap();
+            )
+            .unwrap();
             c.execute(
                 "INSERT INTO sku_unit_conversions(id,product_id,unit_code,conversion_num,conversion_den) VALUES(?1,?2,'LON',1,1)",
                 params![format!("unit{n}"), id],
@@ -795,16 +796,21 @@ mod tests {
         assert_eq!(preview.total_rows, 1446);
         assert_eq!(preview.inserted_rows, 1446);
         assert_eq!(preview.error_rows, 0);
-        let before: i64 = c.query_row("SELECT count(*) FROM price_list_items", [], |r| r.get(0)).unwrap();
+        let before: i64 = c
+            .query_row("SELECT count(*) FROM price_list_items", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(before, 0);
         let (saved, _) = run(&c, &req, true, Some(&preview.fingerprint)).unwrap();
         assert_eq!(saved.inserted_rows, 1446);
-        let persisted: i64 = c.query_row("SELECT count(*) FROM price_list_items", [], |r| r.get(0)).unwrap();
+        let persisted: i64 = c
+            .query_row("SELECT count(*) FROM price_list_items", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(persisted, 1446);
         let (again, _) = run(&c, &req, true, Some(&preview.fingerprint)).unwrap();
         assert!(again.already_imported);
-        let unchanged: i64 = c.query_row("SELECT count(*) FROM price_list_items", [], |r| r.get(0)).unwrap();
+        let unchanged: i64 = c
+            .query_row("SELECT count(*) FROM price_list_items", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(unchanged, 1446);
     }
-
 }
