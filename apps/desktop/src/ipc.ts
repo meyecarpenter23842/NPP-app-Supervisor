@@ -115,7 +115,7 @@ export interface ImportPreview {
   sha256: string;
   totalRows: number; validRows: number; skippedRows: number; unknownEmployees: number; errorRows: number;
   issues: ImportIssue[]; sample: ImportRowView[];
-  hasPrevious: boolean; sameFileAlreadyActive: boolean;
+  hasPrevious: boolean; sameFileAlreadyActive: boolean; preflightOnly: boolean;
 }
 export interface ImportResult { id: string; inserted: number; unresolved: number; replaced: boolean; alreadyImported: boolean }
 export interface ImportHistory {

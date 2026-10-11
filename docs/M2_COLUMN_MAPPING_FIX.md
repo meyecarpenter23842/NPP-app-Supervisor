@@ -75,3 +75,16 @@ QA cần xác minh ở Windows với ví dụ tệp chỉ có `SKU,SL,Thành ti�
 - Giữ phạm vi backend Sales In/Out đã có. Không nhận tệp bảng giá (Giá nền, GT01 - Bảng Giá Đại Lý) thành doanh số và không hiển thị giả chức năng import SKU. Import SKU chưa được triển khai trong Issue này.
 - Validation, atomic commit, scoped SKU/employee, conversion, reimport history và audit không đổi.
 - Cần CI xanh và kiểm thử UX thực Windows 1366×768 + dữ liệu Excel thực; chưa được owner yêu cầu merge.
+
+## Issue #34 — Nhập Excel không chặn trước khi xem, không trùng nguồn trường
+
+**Owner yêu cầu sửa dứt điểm, ngày 2026-10-11:**
+
+- Một biểu mẫu: chọn NPP, kỳ và tệp; xem ngay toàn bộ cột Excel, gán bằng đúng một dropdown mỗi cột; giá trị chung cho cả tệp được khai báo ở dưới.
+- Mỗi trường chuẩn có tối đa một nguồn: khi đã nhập giá trị chung có nội dung hoặc đã gán cột khác, nó không được đưa vào dropdown cột khác. Loại giao dịch Bán/Trả đã khai báo chung không đưa vào dropdown trừ khi bật "Có cả bán và trả hàng ở từng dòng".
+- Tên trường rõ nghĩa: Ngày giao dịch, Số đơn / chứng từ, STT dòng, Mã hàng, Đơn vị tính, Số lượng, Thành tiền (VND), Mã nhân viên, Bán / Trả hàng.
+- Mọi CSV/XLSX hợp lệ đều được đọc/xem; tiêu đề có "Giá nền", "Bảng giá" là dấu hiệu gợi ý, **không phải lý do từ chối đọc hoặc preview**. Preview trả kết quả và vấn đề cần bổ sung ngay cả khi thiếu dữ liệu NPP/kỳ/nhập.
+- "Bảng giá / Danh mục — chỉ xem" là chế độ riêng (không gửi dữ liệu vào native importer SALES_IN/SALES_OUT, không hiển thị nút xác nhận). **Chưa hỗ trợ nhập tự động danh mục/bảng giá vào DB**; cần contract/issue riêng, không tự dựng giả.
+- Chỉ **xác nhận lưu doanh số** khi nguồn Excel có cột số lượng giao dịch, **hoặc** cột số đơn/chứng từ cùng cột thành tiền từ nguồn. Không tạo doanh thu từ giá niêm yết + số lượng/mã dòng chung tự khai. Dù preview lỗi, không ghi dữ liệu, commit native vẫn revalidate trong transaction.
+- Giữ dữ liệu số nguyên VND, quy đổi SKU theo NPP+ngày, return âm, lịch sử revision, atomic commit và đối chiếu nhân viên; không migration / production.
+- Kết quả UI Windows/file NPP thực tế chỉ đạt sau khi owner tự nghiệm thu; CI không thay thế việc đó.

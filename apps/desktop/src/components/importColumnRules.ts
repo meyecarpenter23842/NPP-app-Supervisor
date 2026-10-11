@@ -2,21 +2,35 @@ import type { ImportKind } from '../ipc';
 
 // The renderer exposes only fields the Rust Sales In/Out importer can actually persist.
 export const STANDARD_FIELDS = [
-  { key: 'date', name: 'Ngày bán / ngày chứng từ', required: true },
-  { key: 'document', name: 'Số chứng từ', required: true },
-  { key: 'line', name: 'Dòng chứng từ', required: false },
-  { key: 'sku', name: 'Mã SKU của NPP', required: true },
+  { key: 'date', name: 'Ngày giao dịch', required: true },
+  { key: 'document', name: 'Số đơn / chứng từ', required: true },
+  { key: 'line', name: 'STT dòng', required: false },
+  { key: 'sku', name: 'Mã hàng', required: true },
   { key: 'unit', name: 'Đơn vị tính', required: true },
   { key: 'quantity', name: 'Số lượng', required: true },
-  { key: 'amount', name: 'Doanh số / giá trị (VND)', required: true },
-  { key: 'employee', name: 'Mã nhân viên của NPP', required: false },
-  { key: 'type', name: 'Loại chứng từ', required: false },
+  { key: 'amount', name: 'Thành tiền (VND)', required: true },
+  { key: 'employee', name: 'Mã nhân viên', required: false },
+  { key: 'type', name: 'Bán / Trả hàng', required: false },
   { key: 'outlet', name: 'Mã điểm bán', required: false },
   { key: 'route', name: 'Mã tuyến', required: false },
 ] as const;
 
 export function fieldsFor(kind: ImportKind) {
   return STANDARD_FIELDS.filter(f => kind === 'SALES_OUT' || !['employee', 'outlet', 'route'].includes(f.key));
+}
+export function fieldsAvailableForColumn(
+  kind: ImportKind, columns: Record<string, string>, fixedValues: Record<string, string>,
+  columnIndex: number, mixedTransactions: boolean,
+) {
+  const position = '@col:' + columnIndex;
+  return fieldsFor(kind).filter(field =>
+    (field.key !== 'type' || mixedTransactions) &&
+    (columns[field.key] === position || !columns[field.key]) &&
+    (columns[field.key] === position || !fixedValues[field.key]?.trim())
+  );
+}
+export function isTransactionSource(columns: Record<string, string>): boolean {
+  return Boolean(columns.quantity || (columns.document && columns.amount));
 }
 export const SOURCE_ROW_DOCUMENT = '@source-row';
 export function missingFields(
