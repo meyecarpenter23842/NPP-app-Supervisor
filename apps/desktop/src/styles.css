@@ -239,3 +239,6 @@ button:disabled { cursor: not-allowed; }
 .master-error, .master-success { margin: 0; padding: 9px 12px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; }
 .master-error { color: #9d3026; background: #fff7f5; }
 .master-success { color: #176741; background: #eef7f1; }
+
+/* Compact in-context help for converting NPP product units. */
+.master-conversion-help { flex: 1 1 100%; margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
