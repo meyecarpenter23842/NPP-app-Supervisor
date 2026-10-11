@@ -5,7 +5,7 @@ import MasterDataContent from './MasterDataContent';
 import CatalogWorkspace from './CatalogWorkspace';
 import ImportContent from './ImportContent';
 
-interface Props { pageId: PageId; view: string; onGoToImport: () => void }
+interface Props { pageId: PageId; view: string; onGoToImport: () => void; onGoToCatalog?: () => void }
 
 type ColumnSet = readonly string[];
 
@@ -157,10 +157,10 @@ function Reports({ view }: { view: string }) {
   </>;
 }
 
-export default function BusinessContent({ pageId, view, onGoToImport }: Props) {
+export default function BusinessContent({ pageId, view, onGoToImport, onGoToCatalog }: Props) {
   switch (pageId) {
     case 'dashboard': return <Dashboard view={view} onGoToImport={onGoToImport} />;
-    case 'imports': return <ImportContent view={view} />;
+    case 'imports': return <ImportContent view={view} onGoToCatalog={onGoToCatalog} />;
     case 'sales-in': return <SalesIn view={view} />;
     case 'sales-out': return <SalesOut view={view} />;
     case 'inventory': return <Inventory view={view} />;
