@@ -100,7 +100,7 @@ export default function ImportContent({ view }: { view: string }) {
     if (!file) return null;
     return { fileName: file.name, bytes: file.bytes, kind, distributorId: nppId,
       periodFrom: from, periodTo: to, sheetName: sheet, headerRow,
-      columns: selectedColumns, fixedValues: Object.fromEntries(Object.entries(fixedValues).filter(([,v]) => v.trim())), rowKind,
+      columns: selectedColumns, mixedTransactions, fixedValues: Object.fromEntries(Object.entries(fixedValues).filter(([,v]) => v.trim())), rowKind,
       ...(positive ? { positiveValue: positive } : {}),
       ...(returned ? { returnValue: returned } : {}),
       ...(cancelled ? { cancelValue: cancelled } : {}) };
@@ -128,6 +128,7 @@ export default function ImportContent({ view }: { view: string }) {
     if (!nppId) return 'Chọn nhà phân phối ở phần thông tin tệp.';
     if (!from || !to || from > to) return 'Nhập từ ngày và đến ngày hợp lệ ở phần thông tin tệp.';
     if (missing.length) return 'Cần chọn cột hoặc khai báo giá trị chung cho: ' + missing.join(', ');
+    if (mixedTransactions && !columns.type) return 'Hãy chọn cột Bán / Trả hàng cho tệp có nhiều loại giao dịch.';
     if (invalidFixed.length) return 'Giá trị chung chưa hợp lệ: ' + invalidFixed.join(', ');
     if (missingFinancialSource) return 'Để lưu doanh số, cần cột Số lượng bán/giao, hoặc cả cột Số đơn/chứng từ và Thành tiền từ Excel.';
     return '';
@@ -321,11 +322,12 @@ export default function ImportContent({ view }: { view: string }) {
         </div> : null}
         {active?.hasFormulas ? <p role="note">Tệp có công thức. Những dòng có công thức cần đổi thành giá trị trước khi nhập.</p> : null}
         {fileMode !== 'PRICE_SHEET' ? <>
-          {showValidation && (missing.length || invalidFixed.length || missingFinancialSource) ?
+          {showValidation && (missing.length || invalidFixed.length || missingFinancialSource || (mixedTransactions && !columns.type)) ?
             <div className="import-validation-note" role="status">
               {missing.length ? <p>Chưa có: {missing.join(', ')}. Chọn cột Excel hoặc nhập thông tin chung.</p> : null}
               {invalidFixed.length ? <p>Giá trị cần kiểm tra: {invalidFixed.join(', ')}.</p> : null}
               {missingFinancialSource ? <p>Để ghi doanh số cần có cột Số lượng thực bán/giao, hoặc cột Số đơn cùng Thành tiền từ Excel.</p> : null}
+              {mixedTransactions && !columns.type ? <p>Đã chọn giao dịch hỗn hợp; hãy chọn cột Bán / Trả hàng.</p> : null}
             </div> : null}
           <div className="import-actions">
             <Button appearance="secondary" disabled={busy || !file}

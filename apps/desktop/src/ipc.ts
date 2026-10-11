@@ -90,6 +90,7 @@ export interface ImportRequest {
   columns: Record<string, string>;
   fixedValues?: Record<string, string>;
   rowKind: 'INVOICE' | 'DELIVERED' | 'RETURN';
+  mixedTransactions?: boolean;
   positiveValue?: string | null;
   returnValue?: string | null;
   cancelValue?: string | null;

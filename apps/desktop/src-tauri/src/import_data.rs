@@ -52,6 +52,8 @@ pub struct ImportRequest {
     #[serde(default)]
     fixed_values: HashMap<String, String>,
     row_kind: String,
+    #[serde(default)]
+    mixed_transactions: bool,
     positive_value: Option<String>,
     return_value: Option<String>,
     cancel_value: Option<String>,
@@ -292,6 +294,11 @@ fn verify_request(r: &ImportRequest) -> Result<(), ImportError> {
         ));
     }
     validate_sources(&r.kind, &r.columns, &r.fixed_values)?;
+    if r.mixed_transactions && !r.columns.contains_key("type") {
+        return Err(invalid(
+            "Tệp có cả bán và trả hàng: cần chọn cột 'Bán / Trả hàng' trong Excel.",
+        ));
+    }
     if !matches!(
         (r.kind.as_str(), r.row_kind.as_str()),
         ("SALES_IN", "INVOICE" | "RETURN") | ("SALES_OUT", "DELIVERED" | "RETURN")
@@ -534,6 +541,9 @@ fn mapping_payload(request: &ImportRequest) -> serde_json::Value {
     });
     if !request.fixed_values.is_empty() {
         json["fixedValues"] = serde_json::json!(request.fixed_values);
+    }
+    if request.mixed_transactions {
+        json["mixedTransactions"] = serde_json::json!(true);
     }
     json
 }
@@ -1209,6 +1219,7 @@ mod tests {
             .map(|(a, b)| (a.into(), b.into()))
             .collect(),
             row_kind: "DELIVERED".into(),
+            mixed_transactions: false,
             fixed_values: HashMap::new(),
             positive_value: None,
             return_value: None,
@@ -1443,6 +1454,15 @@ mod tests {
         assert_eq!(viewed.valid_rows, 1);
     }
     #[test]
+    fn mixed_sales_requires_source_type_before_writing_any_facts() {
+        let mut r = request();
+        r.mixed_transactions = true;
+        assert!(verify_request(&r).is_err());
+        r.columns.insert("type".into(), "@col:7".into());
+        assert!(verify_request(&r).is_ok());
+    }
+
+    #[test]
     fn invalid_fixed_money_or_unproven_sales_are_blocked() {
         let mut r = request();
         r.columns.remove("amount");
@@ -1480,6 +1500,7 @@ mod positional_import_mapping_tests {
             header_row: 1,
             columns,
             row_kind: "DELIVERED".into(),
+            mixed_transactions: false,
             fixed_values: HashMap::new(),
             positive_value: None,
             return_value: None,
@@ -1510,6 +1531,7 @@ mod positional_import_mapping_tests {
             header_row: 1,
             columns,
             row_kind: "DELIVERED".into(),
+            mixed_transactions: false,
             fixed_values: HashMap::new(),
             positive_value: None,
             return_value: None,
