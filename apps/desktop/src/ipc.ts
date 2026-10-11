@@ -17,6 +17,8 @@ export type IpcErrorCode =
   | 'STORAGE_ERROR'
   | 'MASTER_CONFLICT'
   | 'MASTER_NOT_FOUND'
+  | 'IMPORT_INVALID'
+  | 'IMPORT_CONFLICT'
   | 'CONNECTION_ERROR';
 
 export class IpcError extends Error {
@@ -35,6 +37,8 @@ const messages: Record<IpcErrorCode, string> = {
   STORAGE_ERROR: 'Không thể đọc hoặc lưu dữ liệu trên máy. Vui lòng thử lại.',
   MASTER_CONFLICT: 'Mã đã được sử dụng hoặc thời gian phân công bị trùng. Hãy kiểm tra lại.',
   MASTER_NOT_FOUND: 'Không tìm thấy dữ liệu cần sửa.',
+  IMPORT_INVALID: 'Tệp hoặc thông tin nhập chưa hợp lệ. Hãy kiểm tra lại.',
+  IMPORT_CONFLICT: 'Có dữ liệu chưa khớp hoặc đã nhập cho kỳ này. Hãy kiểm tra lại trước khi xác nhận.',
   CONNECTION_ERROR: 'Ứng dụng không phản hồi. Hãy đóng rồi mở lại ứng dụng.',
 };
 
@@ -43,6 +47,10 @@ export function normalizeIpcError(reason: unknown): IpcError {
   if (typeof reason === 'object' && reason !== null && 'code' in reason) {
     const code = (reason as { code: unknown }).code;
     if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(messages, code)) {
+      const userMessage = (reason as { message?: unknown }).message;
+      if (code.startsWith('IMPORT_') && typeof userMessage === 'string' && userMessage.length < 250) {
+        return new IpcError(code as IpcErrorCode, userMessage);
+      }
       return new IpcError(code as IpcErrorCode, messages[code as IpcErrorCode]);
     }
   }
@@ -69,6 +77,42 @@ export type NewMasterLink = {
 };
 export type MasterMutation = { id: string };
 
+export type ImportKind = 'SALES_IN' | 'SALES_OUT';
+export interface ImportRequest {
+  fileName: string;
+  bytes: number[];
+  kind: ImportKind;
+  distributorId: string;
+  periodFrom: string;
+  periodTo: string;
+  sheetName: string;
+  headerRow: number;
+  columns: Record<string, string>;
+  rowKind: 'INVOICE' | 'DELIVERED' | 'RETURN';
+  positiveValue?: string | null;
+  returnValue?: string | null;
+  cancelValue?: string | null;
+}
+export interface ImportRowView { row: number; values: string[] }
+export interface ImportSheetView { name: string; rows: number; firstRows: ImportRowView[]; hasFormulas: boolean }
+export interface ImportFileView { sheets: ImportSheetView[]; sha256: string }
+export interface ImportIssue { row: number; column: string; severity: 'ERROR' | 'WARNING'; message: string }
+export interface ImportPreview {
+  sha256: string;
+  totalRows: number; validRows: number; skippedRows: number; unknownEmployees: number; errorRows: number;
+  issues: ImportIssue[]; sample: ImportRowView[];
+  hasPrevious: boolean; sameFileAlreadyActive: boolean;
+}
+export interface ImportResult { id: string; inserted: number; unresolved: number; replaced: boolean; alreadyImported: boolean }
+export interface ImportHistory {
+  id: string; kind: ImportKind; distributorName: string;
+  periodFrom: string; periodTo: string; sourceFileName: string;
+  sourceSheet: string | null; status: string; active: boolean;
+  totalRows: number; validRows: number; errorRows: number; importedAtUtc: string;
+}
+
+
+
 // Native calls are allowlisted. No renderer SQL, file paths or process execution.
 export const desktopApi = {
   health: () => call<Health>('health'),
@@ -83,16 +127,23 @@ export const desktopApi = {
   setMasterActive: (request: { kind: MasterKind; id: string; active: boolean }) => call<MasterMutation>('set_master_active', { request }),
   createMasterLink: (request: NewMasterLink) => call<MasterMutation>('create_master_link', { request }),
   endMasterLink: (request: { kind: MasterLinkKind; id: string; effectiveTo: string }) => call<MasterMutation>('end_master_link', { request }),
+  inspectImportFile: (fileName: string, bytes: number[]) =>
+    call<ImportFileView>('inspect_import_file', { fileName, bytes }),
+  previewImport: (request: ImportRequest) =>
+    call<ImportPreview>('preview_import', { request }),
+  commitImport: (request: ImportRequest, expectedSha256: string, replaceExisting: boolean) =>
+    call<ImportResult>('commit_import', { request, expectedSha256, replaceExisting }),
+  listImportHistory: () => call<ImportHistory[]>('list_import_history'),
 };
 
 type Command = 'health' | 'get_operator' | 'create_operator' | 'update_operator'
   | 'list_master_data' | 'create_master_item' | 'rename_master_item'
-  | 'set_master_active' | 'create_master_link' | 'end_master_link';
-type NativeRequest = OperatorInput | NewMasterItem | NewMasterLink
+  | 'set_master_active' | 'create_master_link' | 'end_master_link' | 'inspect_import_file' | 'preview_import' | 'commit_import' | 'list_import_history';
+type NativeRequest = OperatorInput | NewMasterItem | NewMasterLink | ImportRequest
   | { kind: MasterKind; id: string; name: string }
   | { kind: MasterKind; id: string; active: boolean }
   | { kind: MasterLinkKind; id: string; effectiveTo: string };
-async function call<T>(command: Command, args?: { request: NativeRequest }): Promise<T> {
+async function call<T>(command: Command, args?: { request?: NativeRequest; fileName?: string; bytes?: number[]; expectedSha256?: string; replaceExisting?: boolean }): Promise<T> {
   try {
     return await invoke<T>(command, args);
   } catch (cause: unknown) {

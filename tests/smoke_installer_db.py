@@ -14,7 +14,7 @@ with sqlite3.connect(db_path) as db:
     db.execute("PRAGMA foreign_keys = ON")
     assert db.execute("PRAGMA foreign_keys").fetchone() == (1,)
     versions = [row[0] for row in db.execute("SELECT version FROM schema_migrations ORDER BY version")]
-    assert versions == ["001", "002", "003"], versions
+    assert versions == ["001", "002", "003", "004"], versions
 
     # Installed app must include M2.1 schema, not merely the migration number.
     expected_tables = {
