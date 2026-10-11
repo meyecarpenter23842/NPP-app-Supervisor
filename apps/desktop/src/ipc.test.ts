@@ -17,7 +17,8 @@ describe('allowlisted typed desktop IPC', () => {
       ['create_operator', { request: input }],
     ]);
     expect(Object.keys(desktopApi)).toEqual(['health', 'getOperator', 'createOperator', 'updateOperator',
-      'listMasterData', 'createMasterItem', 'renameMasterItem', 'setMasterActive', 'createMasterLink', 'endMasterLink']);
+      'listMasterData', 'createMasterItem', 'renameMasterItem', 'setMasterActive', 'createMasterLink', 'endMasterLink',
+      'inspectImportFile', 'previewImport', 'commitImport', 'listImportHistory']);
   });
 
   it('normalizes structured Rust errors without exposing internals', async () => {
@@ -37,6 +38,18 @@ describe('allowlisted typed desktop IPC', () => {
       .rejects.toMatchObject({ code: 'MASTER_CONFLICT', message: expect.not.stringContaining('SQL') });
   });
 
+  it('passes file bytes and exact preview hash to native import commands', async () => {
+    invokeMock.mockResolvedValueOnce({ sheets: [], sha256: 'a' });
+    await desktopApi.inspectImportFile('sales.csv', [49, 50]);
+    expect(invokeMock).toHaveBeenCalledWith('inspect_import_file', { fileName: 'sales.csv', bytes: [49, 50] });
+    const request = { fileName: 'sales.csv', bytes: [49], kind: 'SALES_OUT' as const,
+      distributorId: 'npp', periodFrom: '2026-10-01', periodTo: '2026-10-31',
+      sheetName: 'CSV', headerRow: 1, columns: { date: 'Ngày' }, rowKind: 'DELIVERED' as const };
+    invokeMock.mockResolvedValueOnce({ id: 'ok', inserted: 1 });
+    await desktopApi.commitImport(request, 'abc', true);
+    expect(invokeMock).toHaveBeenCalledWith('commit_import',
+      { request, expectedSha256: 'abc', replaceExisting: true });
+  });
   it('maps unknown/native errors to a sanitized connection problem', () => {
     const error = normalizeIpcError(new Error('C:\\secret\\db.sqlite'));
     expect(error).toBeInstanceOf(IpcError);

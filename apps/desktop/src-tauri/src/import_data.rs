@@ -121,7 +121,7 @@ fn fixed_micro(raw:&str)->Option<i64>{
 fn whole_vnd(raw:&str)->Option<i64>{
     let s=raw.trim();let s=s.trim_start_matches('-');
     if s.is_empty()||!s.bytes().all(|x|x.is_ascii_digit()){return None;}
-    raw.trim().parse::<i64>().ok().map(|x|x.abs())
+    raw.trim().parse::<i64>().ok().and_then(|x|x.checked_abs())
 }
 fn as_date(s:&str)->Result<String,ImportError>{date(s).ok_or_else(||invalid("Ngày không hợp lệ. Hãy dùng YYYY-MM-DD hoặc DD/MM/YYYY."))}
 fn verify_request(r:&ImportRequest)->Result<(),ImportError>{
@@ -366,7 +366,7 @@ mod tests {
         assert_eq!(checked.facts[0].quantity,48_000_000);
         assert_eq!(checked.facts[0].employee.as_deref(),Some("e"));
         assert_eq!(date("01/10/2026").as_deref(),Some("2026-10-01"));
-        assert_eq!(date("46326").as_deref(),Some("2026-10-01"));
+        assert_eq!(date("46296").as_deref(),Some("2026-10-01"));
     }
     #[test] fn missing_employee_remains_unassigned(){
         let d=tempdir().unwrap();let db=AppDatabase::open(d.path()).unwrap();

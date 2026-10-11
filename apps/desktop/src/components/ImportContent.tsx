@@ -145,7 +145,7 @@ export default function ImportContent({ view }: { view: string }) {
     </> : null}
     {view === 'Chọn cột Excel' ? <section className="content-panel import-panel">
       <h3>2. Chọn trang tính và cột dữ liệu</h3>
-      {!workbook ? <p>Chọn tệp ở màn hình “Lần nhập dữ liệu” trước.</p> : <>
+      {!workbook ? <p>Chưa chọn tệp. Hãy chọn tệp ở màn hình “Lần nhập dữ liệu” trước.</p> : <>
         <div className="import-fields">
           <label>Trang tính<select value={sheet} onChange={(e) => {setSheet(e.target.value);setHeaderRow(1);setColumns(emptySelection);setPreview(null);}}>
             {workbook.sheets.map(s => <option key={s.name} value={s.name}>{s.name} ({s.rows} dòng)</option>)}</select></label>
