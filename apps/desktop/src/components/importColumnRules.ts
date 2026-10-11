@@ -18,8 +18,30 @@ export const STANDARD_FIELDS = [
 export function fieldsFor(kind: ImportKind) {
   return STANDARD_FIELDS.filter(f => kind === 'SALES_OUT' || !['employee', 'outlet', 'route'].includes(f.key));
 }
-export function missingFields(kind: ImportKind, selections: Record<string, string>): string[] {
-  return fieldsFor(kind).filter(f => f.required && !selections[f.key]).map(f => f.name);
+export const SOURCE_ROW_DOCUMENT = '@source-row';
+export function missingFields(
+  kind: ImportKind, selections: Record<string, string>, fixedValues: Record<string, string> = {},
+): string[] {
+  return fieldsFor(kind).filter(f => f.required && !selections[f.key] &&
+    !fixedValues[f.key]?.trim()).map(f => f.name);
+}
+export function invalidFixedFields(kind: ImportKind, fixed: Record<string, string>): string[] {
+  return fieldsFor(kind).filter(field => {
+    const value = fixed[field.key];
+    if (value === undefined || value.trim() === '') return false;
+    if (field.key === 'document' && value === SOURCE_ROW_DOCUMENT) return false;
+    if (field.key === 'date') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return true;
+      const date = new Date(value + 'T00:00:00Z');
+      return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value;
+    }
+    if (field.key === 'quantity') return !/^\d+(\.\d{1,6})?$/.test(value);
+    if (field.key === 'amount') return !/^\d+$/.test(value);
+    return value.trim().length > 200 || value === SOURCE_ROW_DOCUMENT;
+  }).map(x => x.name);
+}
+export function hasSourceFinancialEvidence(columns: Record<string, string>): boolean {
+  return Boolean(columns.quantity || columns.amount);
 }
 
 export function cleanHeader(header: string): string {

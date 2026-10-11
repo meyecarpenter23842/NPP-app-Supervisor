@@ -46,6 +46,8 @@ pub struct ImportRequest {
     sheet_name: String,
     header_row: usize,
     columns: HashMap<String, String>,
+    #[serde(default)]
+    fixed_values: HashMap<String, String>,
     row_kind: String,
     positive_value: Option<String>,
     return_value: Option<String>,
@@ -279,19 +281,13 @@ fn verify_request(r: &ImportRequest) -> Result<(), ImportError> {
         || r.period_from > r.period_to
         || !valid_date(&r.period_from)
         || !valid_date(&r.period_to)
-        || r.columns.len() > 16
+        || r.columns.len() + r.fixed_values.len() > 16
     {
         return Err(invalid(
             "Kiểm tra NPP, kỳ, loại doanh số, trang tính và dòng tiêu đề.",
         ));
     }
-    for field in ["date", "sku", "unit", "quantity", "amount", "document"] {
-        if r.columns.get(field).is_none_or(|h| h.trim().is_empty()) {
-            return Err(invalid(
-                "Cần chọn đủ cột ngày, mã hàng, đơn vị, số lượng, tiền và chứng từ.",
-            ));
-        }
-    }
+    validate_sources(&r.kind, &r.columns, &r.fixed_values)?;
     if !matches!(
         (r.kind.as_str(), r.row_kind.as_str()),
         ("SALES_IN", "INVOICE" | "RETURN") | ("SALES_OUT", "DELIVERED" | "RETURN")
@@ -300,6 +296,56 @@ fn verify_request(r: &ImportRequest) -> Result<(), ImportError> {
     }
     Ok(())
 }
+
+fn validate_sources(
+    kind: &str,
+    columns: &HashMap<String, String>,
+    fixed: &HashMap<String, String>,
+) -> Result<(), ImportError> {
+    let fields = [
+        "date", "sku", "unit", "quantity", "amount", "document", "line", "employee", "type",
+        "route", "outlet",
+    ];
+    let allowed = |field: &str| {
+        fields.contains(&field)
+            && (kind == "SALES_OUT" || !["employee", "route", "outlet"].contains(&field))
+    };
+    if columns.len() + fixed.len() > 16
+        || columns.keys().any(|key| !allowed(key.as_str()))
+        || fixed.keys().any(|key| !allowed(key.as_str()) || key == "type")
+        || fixed.keys().any(|key| columns.contains_key(key))
+        || columns.values().any(|value| value.trim().is_empty())
+    {
+        return Err(invalid("Một trường chỉ được lấy từ một cột hoặc một giá trị chung hợp lệ."));
+    }
+    for field in ["date", "sku", "unit", "quantity", "amount", "document"] {
+        if !columns.contains_key(field)
+            && fixed.get(field).is_none_or(|v| v.trim().is_empty())
+        {
+            return Err(invalid(
+                "Thiếu trường bắt buộc: cần chọn cột Excel hoặc khai báo giá trị chung.",
+            ));
+        }
+    }
+    if !columns.contains_key("quantity") && !columns.contains_key("amount") {
+        return Err(invalid(
+            "Số lượng hoặc Doanh số phải có ít nhất một cột nguồn trong Excel.",
+        ));
+    }
+    for (field, value) in fixed {
+        let value = value.trim();
+        if value.len() > 200
+            || (value == "@source-row" && field != "document")
+            || (field == "date" && date(value).is_none())
+            || (field == "quantity" && fixed_micro(value).is_none())
+            || (field == "amount" && whole_vnd(value).is_none())
+        {
+            return Err(invalid("Giá trị chung không hợp lệ. Hãy kiểm tra ngày, số lượng và tiền VND."));
+        }
+    }
+    Ok(())
+}
+
 fn selected_sheet<'a>(sheets: &'a [Sheet], r: &ImportRequest) -> Result<&'a Sheet, ImportError> {
     sheets
         .iter()
@@ -361,10 +407,16 @@ fn column_map(sheet: &Sheet, r: &ImportRequest) -> Result<HashMap<String, usize>
     }
     Ok(indices)
 }
-fn get<'a>(row: &'a [String], indices: &HashMap<String, usize>, field: &str) -> &'a str {
+fn get<'a>(
+    row: &'a [String],
+    indices: &HashMap<String, usize>,
+    fixed: &'a HashMap<String, String>,
+    field: &str,
+) -> &'a str {
     indices
         .get(field)
         .and_then(|i| row.get(*i))
+        .or_else(|| fixed.get(field))
         .map(String::as_str)
         .unwrap_or("")
         .trim()
@@ -450,6 +502,35 @@ fn lookup_outlet(
     )
     .optional()
 }
+
+fn mapping_payload(request: &ImportRequest) -> serde_json::Value {
+    let mut json = serde_json::json!({
+        "headerRow": request.header_row,
+        "columns": request.columns,
+        "positiveValue": request.positive_value,
+        "returnValue": request.return_value,
+        "cancelValue": request.cancel_value,
+        "rowKind": request.row_kind
+    });
+    if !request.fixed_values.is_empty() {
+        json["fixedValues"] = serde_json::json!(request.fixed_values);
+    }
+    json
+}
+fn same_mapping(
+    db: &Connection,
+    batch_id: &str,
+    request: &ImportRequest,
+) -> Result<bool, ImportError> {
+    let value: String = db.query_row(
+        "SELECT p.mapping_json FROM import_batches b JOIN import_profiles p ON p.id=b.import_profile_id WHERE b.id=?1",
+        [batch_id],
+        |row| row.get(0),
+    ).map_err(|_| failed())?;
+    let stored: serde_json::Value = serde_json::from_str(&value).map_err(|_| failed())?;
+    Ok(stored == mapping_payload(request))
+}
+
 fn active(db: &Connection, r: &ImportRequest) -> rusqlite::Result<Option<(String, String)>> {
     db.query_row(
         "SELECT id,source_file_sha256 FROM import_batches
@@ -477,6 +558,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
     let mut facts = Vec::new();
     let mut issues = Vec::new();
     let mut seen = HashSet::new();
+    let source_hash = digest(&r.bytes);
     let (mut total, mut skipped, mut unknown, mut error_rows) = (0usize, 0usize, 0usize, 0usize);
     for (i, cells) in sheet.rows.iter().filter(|(i, _)| *i > r.header_row) {
         if cells.iter().all(|c| c.trim().is_empty()) {
@@ -496,7 +578,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             );
             continue;
         }
-        let on = match as_date(get(cells, &map, "date")) {
+        let on = match as_date(get(cells, &map, &r.fixed_values, "date")) {
             Ok(v) => v,
             Err(_) => {
                 report("Ngày", "Ngày không hợp lệ.");
@@ -507,7 +589,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             report("Ngày", "Ngày chứng từ ngoài kỳ đã chọn.");
             continue;
         }
-        let status = match classify(r, get(cells, &map, "type")) {
+        let status = match classify(r, get(cells, &map, &r.fixed_values, "type")) {
             Ok(Some(v)) => v,
             Ok(None) => {
                 skipped += 1;
@@ -518,8 +600,8 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
                 continue;
             }
         };
-        let code = get(cells, &map, "sku");
-        let unit = get(cells, &map, "unit");
+        let code = get(cells, &map, &r.fixed_values, "sku");
+        let unit = get(cells, &map, &r.fixed_values, "unit");
         let sku = match lookup_sku(db, &r.distributor_id, code, unit, &on).map_err(|_| failed())? {
             Some((id, n, d)) if n > 0 && d > 0 => (id, n, d),
             _ => {
@@ -531,8 +613,8 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             }
         };
         if status != "RETURN"
-            && (get(cells, &map, "quantity").starts_with('-')
-                || get(cells, &map, "amount").starts_with('-'))
+            && (get(cells, &map, &r.fixed_values, "quantity").starts_with('-')
+                || get(cells, &map, &r.fixed_values, "amount").starts_with('-'))
         {
             report(
                 "Số lượng / giá trị",
@@ -540,7 +622,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             );
             continue;
         }
-        let quantity = match fixed_micro(get(cells, &map, "quantity").trim_start_matches('-')) {
+        let quantity = match fixed_micro(get(cells, &map, &r.fixed_values, "quantity").trim_start_matches('-')) {
             Some(v) => v,
             None => {
                 report(
@@ -561,7 +643,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             report("Số lượng", "Quy đổi ra đơn vị cơ sở không chính xác.");
             continue;
         }
-        let amount = match whole_vnd(get(cells, &map, "amount")) {
+        let amount = match whole_vnd(get(cells, &map, &r.fixed_values, "amount")) {
             Some(v) => v,
             None => {
                 report(
@@ -571,15 +653,20 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
                 continue;
             }
         };
-        let doc = get(cells, &map, "document");
-        if doc.is_empty() {
-            report("Chứng từ", "Thiếu số chứng từ.");
+        let document_source = get(cells, &map, &r.fixed_values, "document");
+        if document_source.is_empty() {
+            report("Chứng từ", "Thiếu số chứng từ hoặc mã dòng nguồn.");
             continue;
         }
-        let line = get(cells, &map, "line");
+        let doc = if r.fixed_values.get("document").is_some_and(|v| v == "@source-row") {
+            format!("SRC:{}:{}:{i}", &source_hash[..12], r.sheet_name)
+        } else {
+            document_source.to_owned()
+        };
+        let line = get(cells, &map, &r.fixed_values, "line");
         let duplicate = (
             on.clone(),
-            doc.to_owned(),
+            doc.clone(),
             line.to_owned(),
             sku.0.clone(),
             status.to_owned(),
@@ -588,7 +675,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             report("Chứng từ", "Trùng dòng chứng từ trong tệp.");
             continue;
         }
-        let route_code = get(cells, &map, "route");
+        let route_code = get(cells, &map, &r.fixed_values, "route");
         let route = if r.kind == "SALES_OUT" && !route_code.is_empty() {
             match lookup_route(db, &r.distributor_id, route_code).map_err(|_| failed())? {
                 Some(id) => Some(id),
@@ -603,7 +690,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
         } else {
             None
         };
-        let outlet_code = get(cells, &map, "outlet");
+        let outlet_code = get(cells, &map, &r.fixed_values, "outlet");
         let outlet = if r.kind == "SALES_OUT" && !outlet_code.is_empty() {
             match lookup_outlet(db, &r.distributor_id, outlet_code).map_err(|_| failed())? {
                 Some((id, outlet_route)) => {
@@ -627,7 +714,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
         } else {
             None
         };
-        let staff = get(cells, &map, "employee");
+        let staff = get(cells, &map, &r.fixed_values, "employee");
         let employee = if r.kind == "SALES_OUT" && !staff.is_empty() {
             lookup_employee(db, &r.distributor_id, staff, &on).map_err(|_| failed())?
         } else {
@@ -652,7 +739,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             route,
             outlet,
             business_date: on,
-            document: doc.into(),
+            document: doc,
             line: if line.is_empty() {
                 None
             } else {
@@ -671,7 +758,7 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
         skipped,
         unknown,
         error_rows,
-        sha: digest(&r.bytes),
+        sha: source_hash,
         previous,
     })
 }
@@ -684,6 +771,8 @@ fn summarize(c: &Checked) -> (usize, usize) {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportMappingProfile {
     columns: HashMap<String, String>,
+    #[serde(default)]
+    fixed_values: HashMap<String, String>,
     row_kind: String,
     positive_value: Option<String>,
     return_value: Option<String>,
@@ -696,6 +785,8 @@ pub struct ImportMappingSaveRequest {
     distributor_id: String,
     headers: Vec<String>,
     columns: HashMap<String, String>,
+    #[serde(default)]
+    fixed_values: HashMap<String, String>,
     row_kind: String,
     positive_value: Option<String>,
     return_value: Option<String>,
@@ -746,12 +837,8 @@ pub fn save_import_mapping_profile(
     request: ImportMappingSaveRequest,
 ) -> Result<(), ImportError> {
     let key = mapping_name(&request.kind, &request.distributor_id, &request.headers)?;
-    let required = ["date", "document", "sku", "unit", "quantity", "amount"];
-    if required
-        .iter()
-        .any(|field| request.columns.get(*field).is_none_or(|x| x.is_empty()))
-        || request.columns.len() > 11
-        || !matches!(
+    validate_sources(&request.kind, &request.columns, &request.fixed_values)?;
+    if !matches!(
             (request.kind.as_str(), request.row_kind.as_str()),
             ("SALES_IN", "INVOICE" | "RETURN") | ("SALES_OUT", "DELIVERED" | "RETURN")
         )
@@ -800,6 +887,7 @@ pub fn save_import_mapping_profile(
     }
     let profile = ImportMappingProfile {
         columns: request.columns,
+        fixed_values: request.fixed_values,
         row_kind: request.row_kind,
         positive_value: request.positive_value,
         return_value: request.return_value,
@@ -883,7 +971,10 @@ pub fn preview_import(
             })
             .unwrap_or_default(),
         has_previous: c.previous.is_some(),
-        same_file_already_active: c.previous.is_some_and(|(_, h)| h == c.sha),
+        same_file_already_active: match &c.previous {
+            Some((id, hash)) if hash == &c.sha => same_mapping(&db, id, &request)?,
+            _ => false,
+        },
     })
 }
 #[tauri::command]
@@ -918,7 +1009,7 @@ fn commit_with_conn(
         return Err(invalid("Tệp không có dòng hợp lệ để nhập."));
     }
     if let Some((id, hash)) = &c.previous {
-        if hash == &c.sha {
+        if hash == &c.sha && same_mapping(&tx, id, &request)? {
             return Ok(ImportResult {
                 id: id.clone(),
                 inserted: 0,
@@ -939,7 +1030,7 @@ fn commit_with_conn(
     let profile_id: String = tx
         .query_row("SELECT lower(hex(randomblob(16)))", [], |x| x.get(0))
         .map_err(|_| failed())?;
-    let map = serde_json::json!({"headerRow":request.header_row,"columns":request.columns,"positiveValue":request.positive_value,"returnValue":request.return_value,"cancelValue":request.cancel_value,"rowKind":request.row_kind});
+    let map = mapping_payload(&request);
     let now = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
     tx.execute(
         &format!(
@@ -1053,6 +1144,7 @@ mod tests {
             .map(|(a, b)| (a.into(), b.into()))
             .collect(),
             row_kind: "DELIVERED".into(),
+            fixed_values: HashMap::new(),
             positive_value: None,
             return_value: None,
             cancel_value: None,
@@ -1199,6 +1291,64 @@ mod tests {
         assert!(result.facts[0].employee.is_none());
         assert!(result.issues.iter().any(|i| i.severity == "WARNING"));
     }
+
+    #[test]
+    fn fixed_values_support_real_file_wide_defaults_and_generated_row_provenance() {
+        let d = tempdir().unwrap();
+        let db = AppDatabase::open(d.path()).unwrap();
+        let c = db.connection.lock().unwrap();
+        setup(&c);
+        let mut r = request();
+        r.bytes = b"sku;qty;amount\n0007;2;240000\n0007;1;120000\n".to_vec();
+        r.columns = [("sku", "sku"), ("quantity", "qty"), ("amount", "amount")]
+            .into_iter().map(|(key, value)| (key.into(), value.into())).collect();
+        r.fixed_values = [
+            ("date", "2026-10-01"),
+            ("unit", "THUNG"),
+            ("document", "@source-row"),
+        ].into_iter().map(|(key, value)| (key.into(), value.into())).collect();
+        let data = checked(&c, &r).unwrap();
+        assert_eq!(data.facts.len(), 2);
+        assert_eq!(data.facts[0].quantity, 48_000_000);
+        assert_eq!(data.facts[0].amount, 240_000);
+        assert_ne!(data.facts[0].document, data.facts[1].document);
+        assert!(data.facts[0].document.starts_with("SRC:"));
+        r.fixed_values.insert("amount".into(), "0".into());
+        assert!(checked(&c, &r).is_err());
+    }
+    #[test]
+    fn same_file_new_defaults_requires_replacement_and_is_not_duplicate() {
+        let d = tempdir().unwrap();
+        let db = AppDatabase::open(d.path()).unwrap();
+        db.create_operator("CI", crate::storage::OperatorRole::Asm).unwrap();
+        let c = db.connection.lock().unwrap();
+        setup(&c);
+        let first = request();
+        let hash = digest(&first.bytes);
+        commit_with_conn(&c, first.clone(), hash.clone(), false).unwrap();
+        let mut revised = first.clone();
+        revised.columns.remove("unit");
+        revised.fixed_values.insert("unit".into(), "THUNG".into());
+        assert!(!same_mapping(
+            &c,
+            &c.query_row("SELECT id FROM import_batches WHERE active=1", [], |r| r.get::<_, String>(0)).unwrap(),
+            &revised
+        ).unwrap());
+        assert!(commit_with_conn(&c, revised.clone(), hash.clone(), false).is_err());
+        assert!(commit_with_conn(&c, revised, hash, true).unwrap().replaced);
+    }
+    #[test]
+    fn invalid_fixed_money_or_unproven_sales_are_blocked() {
+        let mut r = request();
+        r.columns.remove("amount");
+        r.fixed_values.insert("amount".into(), "1,000".into());
+        assert!(verify_request(&r).is_err());
+        r.fixed_values.insert("amount".into(), "1000".into());
+        assert!(verify_request(&r).is_ok());
+        r.columns.remove("quantity");
+        r.fixed_values.insert("quantity".into(), "1".into());
+        assert!(verify_request(&r).is_err());
+    }
 }
 
 #[cfg(test)]
@@ -1225,6 +1375,7 @@ mod positional_import_mapping_tests {
             header_row: 1,
             columns,
             row_kind: "DELIVERED".into(),
+            fixed_values: HashMap::new(),
             positive_value: None,
             return_value: None,
             cancel_value: None,
@@ -1254,6 +1405,7 @@ mod positional_import_mapping_tests {
             header_row: 1,
             columns,
             row_kind: "DELIVERED".into(),
+            fixed_values: HashMap::new(),
             positive_value: None,
             return_value: None,
             cancel_value: None,
