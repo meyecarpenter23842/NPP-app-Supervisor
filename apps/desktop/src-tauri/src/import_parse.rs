@@ -445,4 +445,71 @@ mod tests {
         assert!(parse("x.csv", b"a,b\n\"missing").is_err());
         assert!(parse("x.csv", &vec![0; MAX_FILE + 1]).is_err());
     }
+    // Minimal uncompressed ZIP fixture exercises actual XLSX workbook relationship,
+    // shared-string resolution and worksheet column placement without a new test dep.
+    fn zip_fixture(parts: &[(&str, &str)]) -> Vec<u8> {
+        let mut file = Vec::new();
+        let mut directory = Vec::new();
+        fn put16(out: &mut Vec<u8>, n: u16) {
+            out.extend_from_slice(&n.to_le_bytes());
+        }
+        fn put32(out: &mut Vec<u8>, n: u32) {
+            out.extend_from_slice(&n.to_le_bytes());
+        }
+        for (name, body) in parts {
+            let offset = file.len() as u32;
+            file.extend_from_slice(b"PK\x03\x04");
+            for n in [20, 0, 0, 0, 0] {
+                put16(&mut file, n);
+            }
+            for n in [0, body.len() as u32, body.len() as u32] {
+                put32(&mut file, n);
+            }
+            put16(&mut file, name.len() as u16);
+            put16(&mut file, 0);
+            file.extend_from_slice(name.as_bytes());
+            file.extend_from_slice(body.as_bytes());
+
+            directory.extend_from_slice(b"PK\x01\x02");
+            for n in [20, 20, 0, 0, 0, 0] {
+                put16(&mut directory, n);
+            }
+            for n in [0, body.len() as u32, body.len() as u32] {
+                put32(&mut directory, n);
+            }
+            put16(&mut directory, name.len() as u16);
+            for _ in 0..4 {
+                put16(&mut directory, 0);
+            }
+            put32(&mut directory, 0);
+            put32(&mut directory, offset);
+            directory.extend_from_slice(name.as_bytes());
+        }
+        let directory_at = file.len() as u32;
+        file.extend_from_slice(&directory);
+        file.extend_from_slice(b"PK\x05\x06");
+        for n in [0, 0, parts.len() as u16, parts.len() as u16] {
+            put16(&mut file, n);
+        }
+        put32(&mut file, directory.len() as u32);
+        put32(&mut file, directory_at);
+        put16(&mut file, 0);
+        file
+    }
+
+    #[test]
+    fn reads_xlsx_sheet_and_preserves_text_code_with_zero_prefix() {
+        let zip = zip_fixture(&[
+            ("xl/workbook.xml", r#"<workbook><sheets><sheet name="Bán ra" r:id="rId1"/></sheets></workbook>"#),
+            ("xl/_rels/workbook.xml.rels", r#"<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>"#),
+            ("xl/sharedStrings.xml", r#"<sst><si><t>Mã hàng</t></si><si><t>0007</t></si></sst>"#),
+            ("xl/worksheets/sheet1.xml", r#"<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row><row r="2"><c r="A2" t="s"><v>1</v></c></row></sheetData></worksheet>"#),
+        ]);
+        let result = parse("bán-ra.xlsx", &zip).expect("valid workbook");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "Bán ra");
+        assert_eq!(result[0].rows[0].1[0], "Mã hàng");
+        assert_eq!(result[0].rows[1].1[0], "0007");
+    }
+
 }
