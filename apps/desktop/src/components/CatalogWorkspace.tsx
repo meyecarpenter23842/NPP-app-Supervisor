@@ -3,7 +3,7 @@ import {
   desktopApi, normalizeIpcError,
   type CatalogSnapshot, type CatalogOptionKind, type CatalogImportKind,
   type CatalogImportRequest, type CatalogBatchPreview, type CatalogImportHistory,
-  type ImportFileView, type MasterSnapshot,
+  type ImportFileView, type MasterSnapshot, type SkuMetric,
 } from '../ipc';
 
 const emptyMaster: MasterSnapshot = { distributors: [], families: [], skus: [], employees: [], routes: [], links: [] };
@@ -204,6 +204,7 @@ function CatalogExcel({ master, catalog, onChange }: {
 
 export default function CatalogWorkspace({ view }: { view: string }) {
   const [master, setMaster] = useState<MasterSnapshot>(emptyMaster);
+  const [metrics, setMetrics] = useState<SkuMetric[]>([]);
   const [catalog, setCatalog] = useState<CatalogSnapshot>(emptyCatalog);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -227,8 +228,8 @@ export default function CatalogWorkspace({ view }: { view: string }) {
   const [closeId, setCloseId] = useState(''); const [closeDate, setCloseDate] = useState('');
   const [editName, setEditName] = useState('');
   const load = useCallback(async () => {
-    const [m, c] = await Promise.all([desktopApi.listMasterData(), desktopApi.listCatalog()]);
-    setMaster(m); setCatalog(c);
+    const [m, c, actual] = await Promise.all([desktopApi.listMasterData(), desktopApi.listCatalog(), desktopApi.listSkuMetrics()]);
+    setMaster(m); setCatalog(c); setMetrics(actual);
     setFamilyId(prev => m.families.some(f => f.id === prev) ? prev : (m.families[0]?.id ?? ''));
     setSkuId(prev => m.skus.some(f => f.id === prev) ? prev : (m.skus[0]?.id ?? ''));
     setNppId(prev => m.distributors.some(f => f.id === prev) ? prev : (m.distributors[0]?.id ?? ''));
@@ -462,8 +463,20 @@ export default function CatalogWorkspace({ view }: { view: string }) {
     </> : null}
     {view === 'Nhập Excel' ? <CatalogExcel master={master} catalog={catalog} onChange={load} /> : null}
     {view === 'Phân tích SKU' ? <section className="content-panel catalog-panel">
-      <h2>Danh mục SKU theo mức độ hoàn thiện</h2>
-      <p>Số liệu dưới đây được đọc từ danh mục hiện có; chưa có tổng hợp giao dịch để tính sản lượng/doanh thu SKU, nên không hiển thị doanh thu dự đoán.</p>
+      <h2>Thực hiện theo SKU từ chứng từ đã nhập</h2>
+      <p>Số liệu lấy từ Sales In/Out đã xác nhận, tách riêng hai nguồn và trừ hoàn hàng. Không dùng bảng giá tham khảo để tính doanh thu.</p>
+      {metrics.length ? <div className="catalog-excel-scroll"><table className="catalog-table">
+        <thead><tr><th>NPP</th><th>SKU chuẩn</th><th>Nguồn</th><th>Đơn vị cơ sở</th><th>Sản lượng</th><th>Doanh số (VND)</th><th>Từ ngày</th><th>Đến ngày</th><th>Dòng nguồn</th></tr></thead>
+        <tbody>{metrics.map(m => <tr key={m.distributorId + ':' + m.productId + ':' + m.sourceKind}>
+          <td>{master.distributors.find(n => n.id === m.distributorId)?.name ?? 'Chưa xác định NPP'}</td>
+          <td>{master.skus.find(x => x.id === m.productId)?.code ?? 'Không xác định'}</td>
+          <td>{m.sourceKind === 'SALES_IN' ? 'Sales In' : 'Sales Out'}</td>
+          <td>{master.skus.find(x => x.id === m.productId)?.detail ?? '—'}</td>
+          <td>{(m.quantityMicro / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 6 })}</td>
+          <td>{m.netAmountVnd.toLocaleString('vi-VN')}</td>
+          <td>{m.firstDate}</td><td>{m.lastDate}</td><td>{m.transactionRows}</td>
+        </tr>)}</tbody></table></div> : <p>Chưa có chứng từ Sales In/Out đã xác nhận để phân tích. Danh mục phía dưới không đồng nghĩa đã phát sinh doanh thu.</p>}
+      <h3>Mức độ hoàn thiện danh mục và mã NPP</h3>
       <div className="catalog-excel-scroll"><table className="catalog-table"><thead><tr><th>Mã SKU</th><th>Tên SKU</th><th>Sản phẩm</th><th>Đơn vị</th><th>Số mã NPP</th><th>Dòng giá</th></tr></thead>
         <tbody>{master.skus.map(s => <tr key={s.id}><td>{s.code}</td><td>{s.name}</td>
           <td>{master.families.find(f => f.id === s.parentId)?.name || 'Chưa gán'}</td><td>{s.detail}</td>
