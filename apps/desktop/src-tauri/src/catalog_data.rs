@@ -326,6 +326,38 @@ fn option_table(kind: &str) -> Result<&'static str> {
         _ => Err(CatalogError::invalid()),
     }
 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NewProductFamily {
+    code: String,
+    name: String,
+    category_id: Option<String>,
+    brand_id: Option<String>,
+}
+
+#[tauri::command]
+pub fn create_product_family(
+    db: State<'_, AppDatabase>,
+    request: NewProductFamily,
+) -> Result<CatalogMutation> {
+    let code = clean(&request.code, 96)?.to_ascii_uppercase();
+    let name = clean(&request.name, 256)?;
+    let conn = db.connection.lock().map_err(|_| CatalogError::unavailable())?;
+    let tx = conn.unchecked_transaction().map_err(CatalogError::storage)?;
+    let id = new_id(&tx)?;
+    tx.execute(
+        "INSERT INTO product_families(id,code,name,category_id,brand_id,category,brand)
+         VALUES(?1,?2,?3,?4,?5,
+           (SELECT name FROM catalog_categories WHERE id=?4),
+           (SELECT name FROM catalog_brands WHERE id=?5))",
+        params![id, code, name, request.category_id, request.brand_id],
+    )
+    .map_err(CatalogError::storage)?;
+    audit(&tx, "CREATE", "FAMILY", &id)?;
+    tx.commit().map_err(CatalogError::storage)?;
+    Ok(CatalogMutation { id })
+}
+
 #[tauri::command]
 pub fn create_catalog_option(
     db: State<'_, AppDatabase>,
