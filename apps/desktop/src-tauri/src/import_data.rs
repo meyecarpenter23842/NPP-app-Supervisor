@@ -630,7 +630,7 @@ pub fn inspect_import_file(file_name: String, bytes: Vec<u8>) -> Result<FileView
         sha256: digest(&bytes),
     })
 }
-fn conn(db: &State<'_, AppDatabase>) -> Result<MutexGuard<'_, Connection>, ImportError> {
+fn conn<'a>(db: &'a State<'_, AppDatabase>) -> Result<MutexGuard<'a, Connection>, ImportError> {
     db.connection.lock().map_err(|_| failed())
 }
 #[tauri::command]

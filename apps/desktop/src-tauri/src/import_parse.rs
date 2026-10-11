@@ -127,15 +127,15 @@ fn zip_xml_entries(src: &[u8]) -> Result<HashMap<String, Vec<u8>>, String> {
     }
     Ok(result)
 }
-fn attr(tag: &BytesStart<'_>, key: &[u8]) -> Option<String> {
+fn attr(tag: &BytesStart<'_>, key: &str) -> Option<String> {
     tag.attributes()
         .flatten()
         .find(|a| a.key.as_ref() == key)
-        .map(|a| String::from_utf8_lossy(a.value.as_ref()).into_owned())
+        .map(|a| a.value.as_ref().to_owned())
 }
 fn text(e: &quick_xml::events::BytesText<'_>) -> Result<String, String> {
     let raw =
-        std::str::from_utf8(e.as_ref()).map_err(|_| err("Excel chứa văn bản không hợp lệ."))?;
+        e.as_ref();
     Ok(quick_xml::escape::unescape(raw)
         .map_err(|_| err("Excel chứa ký tự không hợp lệ."))?
         .into_owned())
@@ -149,11 +149,11 @@ fn shared_strings(xml: Option<&Vec<u8>>) -> Result<Vec<String>, String> {
             .read_event()
             .map_err(|_| err("Bảng chữ Excel bị hỏng."))?
         {
-            Event::Start(e) if e.local_name().as_ref() == b"si" => {
+            Event::Start(e) if e.local_name().as_ref() == "si" => {
                 inside = true;
                 value.clear();
             }
-            Event::End(e) if e.local_name().as_ref() == b"si" => {
+            Event::End(e) if e.local_name().as_ref() == "si" => {
                 strings.push(value.clone());
                 inside = false;
                 if strings.len() > 100_000 {
@@ -202,8 +202,8 @@ fn worksheet(name: &str, xml: &[u8], strings: &[String]) -> Result<Sheet, String
             .read_event()
             .map_err(|_| err("Không đọc được trang tính Excel."))?
         {
-            Event::Start(e) if e.local_name().as_ref() == b"row" => {
-                row_no = attr(&e, b"r")
+            Event::Start(e) if e.local_name().as_ref() == "row" => {
+                row_no = attr(&e, "r")
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(row_no + 1);
                 cells = vec![];
@@ -211,21 +211,21 @@ fn worksheet(name: &str, xml: &[u8], strings: &[String]) -> Result<Sheet, String
                     return Err(err("Trang tính vượt giới hạn số dòng."));
                 }
             }
-            Event::Start(e) if e.local_name().as_ref() == b"c" => {
-                col = attr(&e, b"r").as_deref().and_then(column_index);
-                cell_type = attr(&e, b"t").unwrap_or_default();
+            Event::Start(e) if e.local_name().as_ref() == "c" => {
+                col = attr(&e, "r").as_deref().and_then(column_index);
+                cell_type = attr(&e, "t").unwrap_or_default();
                 cell.clear();
                 formula = false;
             }
             Event::Start(e)
-                if e.local_name().as_ref() == b"v" || e.local_name().as_ref() == b"t" =>
+                if e.local_name().as_ref() == "v" || e.local_name().as_ref() == "t" =>
             {
                 reading = true
             }
-            Event::End(e) if e.local_name().as_ref() == b"v" || e.local_name().as_ref() == b"t" => {
+            Event::End(e) if e.local_name().as_ref() == "v" || e.local_name().as_ref() == "t" => {
                 reading = false
             }
-            Event::Start(e) if e.local_name().as_ref() == b"f" => {
+            Event::Start(e) if e.local_name().as_ref() == "f" => {
                 formula = true;
                 has_formulas = true;
             }
@@ -235,7 +235,7 @@ fn worksheet(name: &str, xml: &[u8], strings: &[String]) -> Result<Sheet, String
                     return Err(err("Một ô Excel quá dài."));
                 }
             }
-            Event::End(e) if e.local_name().as_ref() == b"c" => {
+            Event::End(e) if e.local_name().as_ref() == "c" => {
                 if let Some(i) = col {
                     if i >= MAX_COLUMNS {
                         return Err(err("Trang tính có quá nhiều cột."));
@@ -258,7 +258,7 @@ fn worksheet(name: &str, xml: &[u8], strings: &[String]) -> Result<Sheet, String
                     };
                 }
             }
-            Event::End(e) if e.local_name().as_ref() == b"row" => {
+            Event::End(e) if e.local_name().as_ref() == "row" => {
                 rows.push((row_no, std::mem::take(&mut cells)));
             }
             Event::Eof => break,
@@ -290,8 +290,8 @@ fn xlsx(src: &[u8]) -> Result<Vec<Sheet>, String> {
             .read_event()
             .map_err(|_| err("Danh sách trang tính không hợp lệ."))?
         {
-            Event::Start(e) | Event::Empty(e) if e.local_name().as_ref() == b"Relationship" => {
-                if let (Some(id), Some(target)) = (attr(&e, b"Id"), attr(&e, b"Target")) {
+            Event::Start(e) | Event::Empty(e) if e.local_name().as_ref() == "Relationship" => {
+                if let (Some(id), Some(target)) = (attr(&e, "Id"), attr(&e, "Target")) {
                     let t = target.trim_start_matches('/');
                     let normalized = if t.starts_with("xl/") {
                         t.to_string()
@@ -314,9 +314,9 @@ fn xlsx(src: &[u8]) -> Result<Vec<Sheet>, String> {
             .read_event()
             .map_err(|_| err("Danh sách trang tính không hợp lệ."))?
         {
-            Event::Start(e) | Event::Empty(e) if e.local_name().as_ref() == b"sheet" => {
-                let name = attr(&e, b"name").ok_or_else(|| err("Excel thiếu tên trang tính."))?;
-                let rel = attr(&e, b"r:id").ok_or_else(|| err("Excel thiếu mã trang tính."))?;
+            Event::Start(e) | Event::Empty(e) if e.local_name().as_ref() == "sheet" => {
+                let name = attr(&e, "name").ok_or_else(|| err("Excel thiếu tên trang tính."))?;
+                let rel = attr(&e, "r:id").ok_or_else(|| err("Excel thiếu mã trang tính."))?;
                 if let Some(path) = links.get(&rel) {
                     let xml = entries
                         .get(path)
