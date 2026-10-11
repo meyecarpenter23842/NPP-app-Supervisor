@@ -242,3 +242,24 @@ button:disabled { cursor: not-allowed; }
 
 /* Compact in-context help for converting NPP product units. */
 .master-conversion-help { flex: 1 1 100%; margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+
+/* Import steps use the same compact desktop language as master data. */
+.import-workspace { display: grid; gap: 14px; }
+.import-lead h2 { font-size: 16px; margin: 0 0 4px; }
+.import-lead p { font-size: 12px; color: var(--muted); margin: 0; }
+.import-panel { padding: 16px; min-width: 0; display: grid; gap: 12px; }
+.import-panel h3 { font-size: 14px; margin: 0; }
+.import-panel p { font-size: 12px; line-height: 1.5; margin: 0; color: var(--muted); }
+.import-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.import-fields label { display: grid; min-width: 175px; flex: 1 1 190px; gap: 5px; font-size: 12px; }
+.import-fields input, .import-fields select { width: 100%; max-width: 100%; min-width: 0; height: 34px; padding: 5px 8px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.import-fields input[type=file] { height: auto; min-height: 34px; }
+.import-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 6px; }
+.import-scroll table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 12px; }
+.import-scroll th, .import-scroll td { text-align: left; border-bottom: 1px solid var(--border); padding: 9px 10px; }
+.import-scroll th { background: var(--surface-soft); font-weight: 650; }
+.import-scroll tbody tr:last-child td { border: 0; }
+.import-stats { display: flex; flex-wrap: wrap; gap: 10px 20px; font-size: 12px; }
+.import-confirm { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
+.import-panel > button { justify-self: start; }
+@media(max-width:800px) { .import-panel { padding: 12px; } }

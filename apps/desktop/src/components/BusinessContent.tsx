@@ -2,6 +2,7 @@ import { Badge, Button, Text } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 import type { PageId } from './pageModel';
 import MasterDataContent from './MasterDataContent';
+import ImportContent from './ImportContent';
 
 interface Props { pageId: PageId; view: string; onGoToImport: () => void }
 
@@ -63,25 +64,6 @@ function Dashboard({ view, onGoToImport }: { view: string; onGoToImport: () => v
       <section className="content-panel"><SectionHeader title="Theo dõi theo nhà phân phối" description="Doanh số và tình trạng xử lý dữ liệu."/><DataTable label="tổng hợp nhà phân phối" columns={['Nhà phân phối', 'Sales In', 'Sales Out', 'Kỳ', 'Nguồn']} /></section>
       <section className="content-panel panel-pad"><h2>Bắt đầu từ dữ liệu nguồn</h2><p>Để theo dõi kết quả thực tế, dữ liệu NPP, danh mục và chứng từ cần được kiểm tra trước khi tính toán.</p><div className="check-sequence"><span>01 · Danh mục NPP / SKU</span><span>02 · Nhân sự / phân công</span><span>03 · Sales In / Out / XNT</span><span>04 · Chỉ tiêu kỳ</span></div><SubtleLink onClick={onGoToImport} /></section>
     </div>
-  </>;
-}
-
-function Imports({ view }: { view: string }) {
-  if (view === 'Chọn cột Excel') return <>
-    <SectionHeader title="Chọn cột dữ liệu từ Excel" description="Chọn cột trong tệp Excel/CSV tương ứng với thông tin cần nhập, như ngày bán, mã hàng, số lượng." />
-    <div className="content-split equal"><section className="content-panel panel-pad"><h2>Cột dữ liệu đầu vào</h2><div className="mapping-empty">Chưa chọn tệp Excel để xem các cột.</div></section><section className="content-panel panel-pad"><h2>Thông tin cần nhập</h2><div className="mapping-empty">Chưa lưu cách chọn cột cho tệp này.</div></section></div>
-    <ComingSoon feature="Chọn tệp Excel và lưu cách chọn cột" />
-  </>;
-  if (view === 'Dòng cần kiểm tra') return <>
-    <SectionHeader title="Các dòng dữ liệu cần kiểm tra" description="Khi có chức năng nhập tệp, phần này sẽ cho biết trang tính, dòng, cột và lý do cần sửa." />
-    <DataTable label="lỗi nhập" columns={['Lần nhập', 'Trang tính', 'Dòng', 'Cột', 'Vấn đề', 'Cách xử lý']} />
-    <Notice title="Nhân viên chưa xác định">Nếu không tìm thấy mã nhân viên trong danh sách, cần kiểm tra lại mã của NPP; không tự chọn theo tên.</Notice>
-  </>;
-  return <>
-    <SectionHeader title="Quy trình nhập và xác nhận" description="Các bước bên dưới mô tả luồng chuẩn; công cụ nhập file chưa được bật." />
-    <div className="process-track"><div><b>01</b><span>Chọn nguồn</span></div><div><b>02</b><span>Chọn cột Excel</span></div><div><b>03</b><span>Kiểm tra lỗi</span></div><div><b>04</b><span>Xác nhận nhập</span></div></div>
-    <div className="content-panel"><SectionHeader title="Lịch sử nhập dữ liệu" description="Các tệp đã chọn, kỳ báo cáo và tình trạng kiểm tra." /><DataTable label="lần nhập dữ liệu" columns={['Tên file', 'Loại dữ liệu', 'NPP', 'Kỳ', 'Trạng thái', 'Cập nhật']} /></div>
-    <ComingSoon feature="Chọn và nhập tệp Excel/CSV" />
   </>;
 }
 
@@ -192,7 +174,7 @@ function Reports({ view }: { view: string }) {
 export default function BusinessContent({ pageId, view, onGoToImport }: Props) {
   switch (pageId) {
     case 'dashboard': return <Dashboard view={view} onGoToImport={onGoToImport} />;
-    case 'imports': return <Imports view={view} />;
+    case 'imports': return <ImportContent view={view} />;
     case 'sales-in': return <SalesIn view={view} />;
     case 'sales-out': return <SalesOut view={view} />;
     case 'inventory': return <Inventory view={view} />;
