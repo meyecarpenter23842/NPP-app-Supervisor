@@ -60,6 +60,7 @@ function CatalogExcel({ master, catalog, onChange }: {
   const [picked, setPicked] = useState<Record<number, string>>({});
   const [fixed, setFixed] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<CatalogBatchPreview | null>(null);
+  const [previewPage, setPreviewPage] = useState(0);
   const [history, setHistory] = useState<CatalogImportHistory[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -76,7 +77,7 @@ function CatalogExcel({ master, catalog, onChange }: {
     Object.entries(picked).filter(([, v]) => !!v).map(([index, field]) => [field, Number(index)]),
   ), [picked]);
   const required = fields.filter(f => f.required && mapped[f.key] === undefined && !fixed[f.key]?.trim());
-  const refreshSelection = () => { setPreview(null); setError(''); setNotice(''); };
+  const refreshSelection = () => { setPreview(null); setPreviewPage(0); setError(''); setNotice(''); };
   function request(): CatalogImportRequest | null {
     if (!chosen || !sheet || !header) { setError('Hãy chọn tệp và trang dữ liệu.'); return null; }
     if (required.length) { setError('Chưa chọn: ' + required.map(f => f.label).join(', ')); return null; }
@@ -110,7 +111,7 @@ function CatalogExcel({ master, catalog, onChange }: {
     setBusy(true); setError(''); setNotice('');
     try {
       const checked = await desktopApi.previewCatalogImport(req);
-      setPreview(checked);
+      setPreview(checked); setPreviewPage(0);
       if (checked.errorRows) setError(checked.errorRows + ' dòng cần xử lý; dữ liệu chưa được ghi.');
       else if (checked.alreadyImported) setNotice('Tệp này đã nhập với cùng cách chọn cột, không ghi lại.');
       else setNotice('Xem trước thành công. Chưa ghi dữ liệu lên máy.');
@@ -189,6 +190,20 @@ function CatalogExcel({ master, catalog, onChange }: {
         <span>Cần xử lý: <strong>{preview.errorRows}</strong></span></div>
       {preview.issues.length > 0 && <div className="catalog-excel-scroll"><table className="catalog-table"><thead><tr><th>Dòng</th><th>Trạng thái</th><th>Lý do</th></tr></thead>
         <tbody>{preview.issues.map(x => <tr key={x.row}><td>{x.row}</td><td>{caption[x.status]}</td><td>{x.message}</td></tr>)}</tbody></table></div>}
+      {preview.sample.length ? <>
+        <h3>Trạng thái từng dòng</h3>
+        <div className="catalog-actions">
+          <button type="button" disabled={previewPage === 0} onClick={() => setPreviewPage(n => Math.max(0, n - 1))}>Trang trước</button>
+          <span role="status">Trang {previewPage + 1} / {Math.ceil(preview.sample.length / 50)}</span>
+          <button type="button" disabled={(previewPage + 1) * 50 >= preview.sample.length} onClick={() => setPreviewPage(n => n + 1)}>Trang sau</button>
+        </div>
+        <div className="catalog-excel-scroll" role="region" aria-label="Trạng thái các dòng Excel" tabIndex={0}>
+          <table className="catalog-table"><thead><tr><th scope="col">Dòng Excel</th><th scope="col">Kết quả</th><th scope="col">Chi tiết</th></tr></thead>
+            <tbody>{preview.sample.slice(previewPage * 50, (previewPage + 1) * 50).map(x =>
+              <tr key={x.row}><th scope="row">{x.row}</th><td>{caption[x.status]}</td><td>{x.message}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </> : null}
       {preview.issues.length === 0 ? <p>Đã kiểm tra các dòng trong tệp. Chỉ khi xác nhận, dữ liệu mới được lưu vào danh mục và bảng giá hiện có.</p> : null}
     </section> : null}
     <section className="content-panel catalog-panel">
