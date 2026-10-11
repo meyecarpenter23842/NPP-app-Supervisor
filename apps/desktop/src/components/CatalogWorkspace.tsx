@@ -242,7 +242,6 @@ export default function CatalogWorkspace({ view }: { view: string }) {
     finally { setBusy(false); }
   }
   const family = master.families.find(x => x.id === familyId);
-  const sku = master.skus.find(x => x.id === skuId);
   const selectedNpp = nppId || master.distributors[0]?.id || '';
   const activeLists = catalog.priceLists.filter(x => x.distributorId === selectedNpp);
   const selectedList = activeLists.some(x => x.id === listId) ? listId : (activeLists[0]?.id ?? '');
