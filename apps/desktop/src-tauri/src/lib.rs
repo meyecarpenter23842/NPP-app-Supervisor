@@ -5,6 +5,7 @@ mod import_data;
 mod import_parse;
 mod master_data;
 mod storage;
+mod sku_analytics;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,6 +20,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::health,
             catalog_data::list_catalog,
+            sku_analytics::list_sku_metrics,
             catalog_import::preview_catalog_import,
             catalog_import::commit_catalog_import,
             catalog_import::list_catalog_import_history,
