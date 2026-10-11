@@ -26,7 +26,10 @@ fn invalid(s: &str) -> ImportError {
     }
 }
 fn failed() -> ImportError {
-    invalid("Không thể kiểm tra hoặc ghi dữ liệu. Vui lòng thử lại.")
+    ImportError {
+        code: "STORAGE_ERROR",
+        message: "Không thể kiểm tra hoặc ghi dữ liệu. Vui lòng thử lại.".to_owned(),
+    }
 }
 fn conflict(s: &str) -> ImportError {
     ImportError {
@@ -49,6 +52,8 @@ pub struct ImportRequest {
     #[serde(default)]
     fixed_values: HashMap<String, String>,
     row_kind: String,
+    #[serde(default)]
+    mixed_transactions: bool,
     positive_value: Option<String>,
     return_value: Option<String>,
     cancel_value: Option<String>,
@@ -94,6 +99,7 @@ pub struct Preview {
     sample: Vec<RowView>,
     has_previous: bool,
     same_file_already_active: bool,
+    preflight_only: bool,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -288,6 +294,11 @@ fn verify_request(r: &ImportRequest) -> Result<(), ImportError> {
         ));
     }
     validate_sources(&r.kind, &r.columns, &r.fixed_values)?;
+    if r.mixed_transactions && !r.columns.contains_key("type") {
+        return Err(invalid(
+            "Tệp có cả bán và trả hàng: cần chọn cột 'Bán / Trả hàng' trong Excel.",
+        ));
+    }
     if !matches!(
         (r.kind.as_str(), r.row_kind.as_str()),
         ("SALES_IN", "INVOICE" | "RETURN") | ("SALES_OUT", "DELIVERED" | "RETURN")
@@ -322,16 +333,28 @@ fn validate_sources(
             "Một trường chỉ được lấy từ một cột hoặc một giá trị chung hợp lệ.",
         ));
     }
-    for field in ["date", "sku", "unit", "quantity", "amount", "document"] {
+    for (field, label) in [
+        ("date", "Ngày giao dịch"),
+        ("sku", "Mã hàng"),
+        ("unit", "Đơn vị tính"),
+        ("quantity", "Số lượng"),
+        ("amount", "Thành tiền"),
+        ("document", "Số đơn / chứng từ"),
+    ] {
         if !columns.contains_key(field) && fixed.get(field).is_none_or(|v| v.trim().is_empty()) {
-            return Err(invalid(
-                "Thiếu trường bắt buộc: cần chọn cột Excel hoặc khai báo giá trị chung.",
-            ));
+            return Err(invalid(&format!(
+                "Chưa có {label}. Hãy chọn cột Excel hoặc nhập một lần cho cả tệp."
+            )));
         }
     }
-    if !columns.contains_key("quantity") && !columns.contains_key("amount") {
+    // Pricing-only sources must never be turned into sales just by supplying a constant
+    // quantity and a generated source-row document number. The check is on the actual
+    // selected sources, not on header text such as "Bang gia".
+    if !columns.contains_key("quantity")
+        && !(columns.contains_key("document") && columns.contains_key("amount"))
+    {
         return Err(invalid(
-            "Số lượng hoặc Doanh số phải có ít nhất một cột nguồn trong Excel.",
+            "Để ghi doanh số cần cột Số lượng thực bán/giao, hoặc cả Số đơn và Thành tiền từ Excel.",
         ));
     }
     for (field, value) in fixed {
@@ -518,6 +541,9 @@ fn mapping_payload(request: &ImportRequest) -> serde_json::Value {
     });
     if !request.fixed_values.is_empty() {
         json["fixedValues"] = serde_json::json!(request.fixed_values);
+    }
+    if request.mixed_transactions {
+        json["mixedTransactions"] = serde_json::json!(true);
     }
     json
 }
@@ -956,35 +982,75 @@ pub fn preview_import(
     request: ImportRequest,
 ) -> Result<Preview, ImportError> {
     let db = conn(&db)?;
-    let c = checked(&db, &request)?;
-    let (valid, _) = summarize(&c);
-    Ok(Preview {
-        sha256: c.sha.clone(),
-        total_rows: c.total,
-        valid_rows: valid,
-        skipped_rows: c.skipped,
-        unknown_employees: c.unknown,
-        issues: c.issues,
-        error_rows: c.error_rows,
-        sample: import_parse::parse(&request.file_name, &request.bytes)
-            .map_err(|s| invalid(&s))?
-            .into_iter()
-            .find(|s| s.name == request.sheet_name)
-            .map(|s| {
-                s.rows
-                    .into_iter()
-                    .filter(|(row, _)| *row > request.header_row)
-                    .take(12)
-                    .map(|(row, values)| RowView { row, values })
-                    .collect()
+    preview_with_conn(&db, &request)
+}
+
+// Viewing source rows is always possible for a structurally valid workbook, even when
+// a sales import has not yet been configured. Only the commit path writes to SQLite.
+fn preview_with_conn(db: &Connection, request: &ImportRequest) -> Result<Preview, ImportError> {
+    let sheets =
+        import_parse::parse(&request.file_name, &request.bytes).map_err(|s| invalid(&s))?;
+    let sample = sheets
+        .iter()
+        .find(|s| s.name == request.sheet_name)
+        .map(|s| {
+            s.rows
+                .iter()
+                .filter(|(row, _)| *row > request.header_row)
+                .take(12)
+                .map(|(row, values)| RowView {
+                    row: *row,
+                    values: values.clone(),
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    match checked(db, request) {
+        Ok(c) => {
+            let (valid, _) = summarize(&c);
+            Ok(Preview {
+                sha256: c.sha.clone(),
+                total_rows: c.total,
+                valid_rows: valid,
+                skipped_rows: c.skipped,
+                unknown_employees: c.unknown,
+                issues: c.issues,
+                error_rows: c.error_rows,
+                sample,
+                has_previous: c.previous.is_some(),
+                same_file_already_active: match &c.previous {
+                    Some((id, hash)) if hash == &c.sha => same_mapping(db, id, request)?,
+                    _ => false,
+                },
+                preflight_only: false,
             })
-            .unwrap_or_default(),
-        has_previous: c.previous.is_some(),
-        same_file_already_active: match &c.previous {
-            Some((id, hash)) if hash == &c.sha => same_mapping(&db, id, &request)?,
-            _ => false,
-        },
-    })
+        }
+        Err(err) if err.code == "IMPORT_INVALID" => Ok(Preview {
+            sha256: digest(&request.bytes),
+            total_rows: sheets
+                .iter()
+                .find(|s| s.name == request.sheet_name)
+                .map(|s| {
+                    s.rows
+                        .iter()
+                        .filter(|(row, cells)| {
+                            *row > request.header_row && cells.iter().any(|c| !c.trim().is_empty())
+                        })
+                        .count()
+                })
+                .unwrap_or(0),
+            valid_rows: 0,
+            skipped_rows: 0,
+            unknown_employees: 0,
+            issues: vec![issue(0, "Thông tin nhập", "ERROR", &err.message)],
+            error_rows: 1,
+            sample,
+            has_previous: false,
+            same_file_already_active: false,
+            preflight_only: true,
+        }),
+        Err(err) => Err(err),
+    }
 }
 #[tauri::command]
 pub fn commit_import(
@@ -1153,6 +1219,7 @@ mod tests {
             .map(|(a, b)| (a.into(), b.into()))
             .collect(),
             row_kind: "DELIVERED".into(),
+            mixed_transactions: false,
             fixed_values: HashMap::new(),
             positive_value: None,
             return_value: None,
@@ -1357,6 +1424,45 @@ mod tests {
         assert!(commit_with_conn(&c, revised, hash, true).unwrap().replaced);
     }
     #[test]
+    fn incomplete_sales_still_previews_source_but_never_commits() {
+        let d = tempdir().unwrap();
+        let db = AppDatabase::open(d.path()).unwrap();
+        let c = db.connection.lock().unwrap();
+        setup(&c);
+        let mut request = request();
+        request.columns.remove("document");
+        request.columns.remove("quantity");
+        request.fixed_values.insert("quantity".into(), "1".into());
+        let viewed = preview_with_conn(&c, &request).unwrap();
+        assert!(viewed.preflight_only);
+        assert_eq!(viewed.valid_rows, 0);
+        assert_eq!(viewed.error_rows, 1);
+        assert_eq!(viewed.sample.len(), 1);
+        assert!(commit_with_conn(&c, request.clone(), digest(&request.bytes), false).is_err());
+    }
+
+    #[test]
+    fn price_like_header_is_not_a_reason_to_reject_actual_transactions() {
+        let d = tempdir().unwrap();
+        let db = AppDatabase::open(d.path()).unwrap();
+        let c = db.connection.lock().unwrap();
+        setup(&c);
+        let mut request = request();
+        request.bytes = b"date;sku;unit;qty;amount;doc;staff;Bang Gia Dai Ly\n2026-10-01;0007;THUNG;2;240000;INV1;NV01;120000\n".to_vec();
+        let viewed = preview_with_conn(&c, &request).unwrap();
+        assert!(!viewed.preflight_only);
+        assert_eq!(viewed.valid_rows, 1);
+    }
+    #[test]
+    fn mixed_sales_requires_source_type_before_writing_any_facts() {
+        let mut r = request();
+        r.mixed_transactions = true;
+        assert!(verify_request(&r).is_err());
+        r.columns.insert("type".into(), "@col:7".into());
+        assert!(verify_request(&r).is_ok());
+    }
+
+    #[test]
     fn invalid_fixed_money_or_unproven_sales_are_blocked() {
         let mut r = request();
         r.columns.remove("amount");
@@ -1394,6 +1500,7 @@ mod positional_import_mapping_tests {
             header_row: 1,
             columns,
             row_kind: "DELIVERED".into(),
+            mixed_transactions: false,
             fixed_values: HashMap::new(),
             positive_value: None,
             return_value: None,
@@ -1424,6 +1531,7 @@ mod positional_import_mapping_tests {
             header_row: 1,
             columns,
             row_kind: "DELIVERED".into(),
+            mixed_transactions: false,
             fixed_values: HashMap::new(),
             positive_value: None,
             return_value: None,

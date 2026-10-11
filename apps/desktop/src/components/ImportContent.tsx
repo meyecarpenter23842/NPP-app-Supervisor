@@ -2,10 +2,16 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'rea
 import { Button } from '@fluentui/react-components';
 import { desktopApi, normalizeIpcError, type ImportFileView, type ImportHistory,
   type ImportKind, type ImportPreview, type ImportRequest, type MasterItem } from '../ipc';
-import { appearsToBePriceList, fieldsFor, hasSourceFinancialEvidence, invalidFixedFields, missingFields, pickHeaderRow, SOURCE_ROW_DOCUMENT, suggestColumns } from './importColumnRules';
+import { appearsToBePriceList, fieldsAvailableForColumn, fieldsFor, invalidFixedFields, isTransactionSource, missingFields, pickHeaderRow, SOURCE_ROW_DOCUMENT, suggestColumns } from './importColumnRules';
 
 const kindName: Record<ImportKind, string> = { SALES_IN: 'Sales In (bán vào)', SALES_OUT: 'Sales Out (bán ra)' };
 const emptySelection: Record<string, string> = {};
+function suggestSalesColumns(headers: string[], kind: ImportKind) {
+  const suggested = suggestColumns(headers, kind);
+  // Bán/trả for the whole file is selected above. A mixed file requires an explicit opt-in.
+  delete suggested.type;
+  return suggested;
+}
 const labelForStatus = (code: string) => code === 'COMMITTED' ? 'Đang sử dụng' : code === 'SUPERSEDED' ? 'Đã thay bằng bản mới' : 'Chưa xác nhận';
 
 export default function ImportContent({ view }: { view: string }) {
@@ -17,6 +23,9 @@ export default function ImportContent({ view }: { view: string }) {
   const [columns, setColumns] = useState<Record<string, string>>(emptySelection);
   const [fixedValues, setFixedValues] = useState<Record<string, string>>({});
   const [kind, setKind] = useState<ImportKind>('SALES_OUT');
+  const [fileMode, setFileMode] = useState<ImportKind | 'PRICE_SHEET'>('SALES_OUT');
+  const [mixedTransactions, setMixedTransactions] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
   const [nppId, setNppId] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -50,18 +59,22 @@ export default function ImportContent({ view }: { view: string }) {
   const selectedColumns = useMemo(() => Object.fromEntries(Object.entries(columns).filter(([,v]) => v !== '')), [columns]);
   const missing = missingFields(kind, selectedColumns, fixedValues);
   const invalidFixed = invalidFixedFields(kind, fixedValues);
-  const missingFinancialSource = !hasSourceFinancialEvidence(selectedColumns);
+  const missingFinancialSource = !isTransactionSource(selectedColumns);
   const invalidFileType = appearsToBePriceList(headers);
   const unmappedRequired = fieldsFor(kind).filter(field => field.required && !columns[field.key]);
-  const unmappedOptional = fieldsFor(kind).filter(field => !field.required && field.key !== 'type' && !columns[field.key]);
+  const unmappedOptional = fieldsFor(kind).filter(field =>
+    !field.required && field.key !== 'type' && !columns[field.key]);
   useEffect(() => {
     if (!nppId || headers.length === 0) return;
     let current = true;
     desktopApi.getImportMappingProfile(kind, nppId, headers)
       .then(profile => {
         if (!current || !profile) return;
-        setColumns(profile.columns);
-        setFixedValues(profile.fixedValues ?? {});
+        const defaults = profile.fixedValues ?? {};
+        setColumns(Object.fromEntries(Object.entries(profile.columns)
+          .filter(([field]) => !defaults[field]?.trim())));
+        setFixedValues(defaults);
+        setMixedTransactions(Boolean(profile.columns.type));
         setRowKind(profile.rowKind);
         setPositive(profile.positiveValue ?? '');
         setReturned(profile.returnValue ?? '');
@@ -87,7 +100,7 @@ export default function ImportContent({ view }: { view: string }) {
     if (!file) return null;
     return { fileName: file.name, bytes: file.bytes, kind, distributorId: nppId,
       periodFrom: from, periodTo: to, sheetName: sheet, headerRow,
-      columns: selectedColumns, fixedValues: Object.fromEntries(Object.entries(fixedValues).filter(([,v]) => v.trim())), rowKind,
+      columns: selectedColumns, mixedTransactions, fixedValues: Object.fromEntries(Object.entries(fixedValues).filter(([,v]) => v.trim())), rowKind,
       ...(positive ? { positiveValue: positive } : {}),
       ...(returned ? { returnValue: returned } : {}),
       ...(cancelled ? { cancelValue: cancelled } : {}) };
@@ -105,7 +118,8 @@ export default function ImportContent({ view }: { view: string }) {
       setSheet(info.sheets[0]?.name ?? '');
       const first = info.sheets[0];
       const titleRow = pickHeaderRow(first?.firstRows ?? []);
-      setColumns(suggestColumns(titleRow?.values ?? [], kind)); setFixedValues({});
+      setColumns(suggestSalesColumns(titleRow?.values ?? [], kind));
+      setFixedValues({}); setMixedTransactions(false); setShowValidation(false);
       setNotice('Đã đọc tệp. Kiểm tra trường chọn ngay trên mỗi cột Excel.');
     } catch (reason: unknown) { setError(normalizeIpcError(reason).message); }
     finally { setBusy(false); }
@@ -113,22 +127,23 @@ export default function ImportContent({ view }: { view: string }) {
   function sourceError(): string {
     if (!nppId) return 'Chọn nhà phân phối ở phần thông tin tệp.';
     if (!from || !to || from > to) return 'Nhập từ ngày và đến ngày hợp lệ ở phần thông tin tệp.';
-    if (invalidFileType) return 'Tệp này giống bảng giá, không phải Sales In/Out. Hãy chọn đúng tệp doanh số.';
     if (missing.length) return 'Cần chọn cột hoặc khai báo giá trị chung cho: ' + missing.join(', ');
+    if (mixedTransactions && !columns.type) return 'Hãy chọn cột Bán / Trả hàng cho tệp có nhiều loại giao dịch.';
     if (invalidFixed.length) return 'Giá trị chung chưa hợp lệ: ' + invalidFixed.join(', ');
-    if (missingFinancialSource) return 'Ít nhất Số lượng hoặc Doanh số phải lấy từ cột Excel thật; không thể tự tạo toàn bộ số liệu.';
+    if (missingFinancialSource) return 'Để lưu doanh số, cần cột Số lượng bán/giao, hoặc cả cột Số đơn/chứng từ và Thành tiền từ Excel.';
     return '';
   }
   async function doPreview() {
-    const problem = sourceError();
-    if (problem) { setError(problem); return; }
+    setShowValidation(true);
     const req = request();
     if (!req) { setError('Chọn tệp Excel hoặc CSV trước.'); return; }
     setBusy(true); setError(''); setNotice(''); setPreview(null);
     try {
       const result = await desktopApi.previewImport(req);
       setPreview(result); setPreviewKey(selectionKey); setReplaceOld(false);
-      setNotice('Đã kiểm tra tệp. Xem các dòng lỗi trước khi xác nhận nhập.');
+      setNotice(result.preflightOnly
+        ? 'Đã đọc tệp. Bổ sung thông tin bên dưới để kiểm tra số liệu bán hàng.'
+        : 'Đã kiểm tra các dòng. Xem kết quả trước khi xác nhận lưu.');
     } catch (reason: unknown) { setError(normalizeIpcError(reason).message); }
     finally { setBusy(false); }
   }
@@ -175,10 +190,18 @@ export default function ImportContent({ view }: { view: string }) {
       <section className="content-panel import-panel" aria-label="Chọn tệp dữ liệu">
         <h3>1. Chọn loại dữ liệu, NPP, kỳ và tệp</h3>
         <div className="import-fields">
-          <label>Loại dữ liệu<select value={kind} onChange={(e) => {
-            const value = e.target.value as ImportKind; setKind(value); setRowKind(value === 'SALES_IN' ? 'INVOICE' : 'DELIVERED');
-            setColumns(suggestColumns(headers, value)); setFixedValues({}); setPreview(null);
-          }}><option value="SALES_OUT">Sales Out — NPP bán ra</option><option value="SALES_IN">Sales In — Bán vào NPP</option></select></label>
+          <label>Loại dữ liệu<select value={fileMode} onChange={(e) => {
+            const value = e.target.value as ImportKind | 'PRICE_SHEET'; setFileMode(value);
+            if (value !== 'PRICE_SHEET') {
+              setKind(value); setRowKind(value === 'SALES_IN' ? 'INVOICE' : 'DELIVERED');
+              setColumns(suggestSalesColumns(headers, value)); setFixedValues({}); setMixedTransactions(false);
+            }
+            setPreview(null); setShowValidation(false); setError('');
+          }}>
+            <option value="SALES_OUT">NPP bán ra (Sales Out)</option>
+            <option value="SALES_IN">Công ty bán vào NPP (Sales In)</option>
+            <option value="PRICE_SHEET">Bảng giá / Danh mục — chỉ xem</option>
+          </select></label>
           <label>Nhà phân phối<select value={nppId} required onChange={(e) => { setNppId(e.target.value); setPreview(null); }}><option value="">Chọn NPP</option>{npps.map(npp =>
             <option key={npp.id} value={npp.id}>{npp.code} · {npp.name}</option>)}</select></label>
           <label>Kỳ từ ngày<input type="date" required value={from} onChange={(e) => { setFrom(e.target.value); setPreview(null); }} /></label>
@@ -192,45 +215,60 @@ export default function ImportContent({ view }: { view: string }) {
 
     </> : null}
     {view === 'Nhập Excel' ? <section className="content-panel import-panel">
-      <h3>2. Chọn dữ liệu ngay trên từng cột Excel</h3>
+      <h3>2. Xem tệp và chọn dữ liệu theo cột</h3>
       {!workbook ? <p>Chọn tệp Excel/CSV ở phần trên để thấy bảng và gán cột.</p> : <>
         <div className="import-sheet-controls">
           {workbook.sheets.length > 1 ? <label>Trang tính
             <select value={sheet} onChange={(e) => {
               const nextSheet = workbook.sheets.find(item => item.name === e.target.value);
               setSheet(e.target.value);
-              setColumns(suggestColumns(pickHeaderRow(nextSheet?.firstRows ?? [])?.values ?? [], kind));
+              setColumns(suggestSalesColumns(pickHeaderRow(nextSheet?.firstRows ?? [])?.values ?? [], kind));
               setFixedValues({}); setPreview(null); setError('');
             }}>
               {workbook.sheets.map(item => <option key={item.name} value={item.name}>{item.name} ({item.rows} dòng)</option>)}
             </select>
           </label> : <p><strong>Trang tính:</strong> {sheet}</p>}
-          <label>Loại chứng từ của tệp
-            <select value={rowKind} onChange={(e) => { setRowKind(e.target.value as typeof rowKind); setPreview(null); }}>
-              {kind === 'SALES_OUT' ? <option value="DELIVERED">Bán / giao hàng</option> : <option value="INVOICE">Bán vào NPP</option>}
-              <option value="RETURN">Hàng trả lại</option>
-            </select>
-          </label>
+          {fileMode !== 'PRICE_SHEET' ? <>
+            <label>Giao dịch trong tệp
+              <select value={rowKind} disabled={mixedTransactions}
+                onChange={(e) => { setRowKind(e.target.value as typeof rowKind); setPreview(null); }}>
+                {kind === 'SALES_OUT' ? <option value="DELIVERED">Bán / giao hàng</option> : <option value="INVOICE">Bán vào NPP</option>}
+                <option value="RETURN">Hàng trả lại</option>
+              </select>
+            </label>
+            <label className="import-mixed-option">
+              <input type="checkbox" checked={mixedTransactions} onChange={(e) => {
+                setMixedTransactions(e.target.checked);
+                if (!e.target.checked) setColumns(current => {
+                  const next = { ...current }; delete next.type; return next;
+                });
+                setPreview(null); setError('');
+              }}/>
+              Có cả bán và trả hàng ở từng dòng Excel
+            </label>
+          </> : null}
           <span className="import-sheet-info">Tên cột Excel tự lấy từ hàng đầu tiên; không cần chọn dòng tiêu đề.</span>
         </div>
-        <p><strong>Mỗi cột chọn đúng một lần</strong> bằng dropdown ngay trên bảng. Cột không cần dùng cứ để “Không sử dụng”.</p>
-        {invalidFileType ? <p role="alert" className="import-field-warning">Tệp có dấu hiệu là bảng giá, không phải doanh số. Không được nhập nhầm thành Sales Out.</p> : null}
-        {missing.length ? <p role="status" className="import-field-warning"><strong>Cần chọn cột hoặc giá trị chung:</strong> {missing.join(' · ')}</p> :
-          <p role="status" className="import-field-ready">Đã khai báo đủ các trường bắt buộc.</p>}
-        {missingFinancialSource ? <p role="status" className="import-field-warning">Số lượng hoặc Doanh số phải có ít nhất một cột dữ liệu thực trong Excel.</p> : null}
-        {invalidFixed.length ? <p role="status" className="import-field-warning">Giá trị chung không hợp lệ: {invalidFixed.join(' · ')}</p> : null}
+        <p>{fileMode === 'PRICE_SHEET'
+          ? 'Đây là chế độ xem tệp. Nhập danh mục và bảng giá chưa được hỗ trợ; không ghi dữ liệu bán hàng.'
+          : 'Chọn ý nghĩa của từng cột Excel một lần. Thông tin chung đã nhập sẽ không xuất hiện trong danh sách chọn.'}</p>
+        {invalidFileType && fileMode !== 'PRICE_SHEET' ?
+          <p className="import-file-hint" role="note">Có cột giá trong tệp. Nếu đây là danh mục/bảng giá, chuyển sang “Bảng giá / Danh mục — chỉ xem”. App không tự kết luận file của anh là sai.</p> : null}
         <div className="import-scroll import-source-table" role="region" aria-label="Bảng Excel và chọn trường chuẩn" tabIndex={0}>
           <table><thead><tr><th className="import-row-number">Dòng Excel</th>{headers.map((h,i) => {
             const position = '@col:' + i;
             const selectedField = Object.keys(columns).find(key => columns[key] === position) ?? '';
             return <th key={i} className="import-source-heading">
-              <label htmlFor={'source-column-' + i}>Trường dữ liệu cột {i+1}</label>
-              <select id={'source-column-' + i} aria-label={'Chọn trường chuẩn cho cột ' + (i+1) + ': ' + (h || 'Không có tiêu đề')}
-                value={selectedField} onChange={e => chooseColumn(i,e.target.value)}>
-                <option value="">Không sử dụng</option>
-                {fieldsFor(kind).map(f => <option key={f.key} value={f.key}
-                  disabled={Boolean(columns[f.key]) && columns[f.key] !== position}>{f.name}{f.required ? ' *' : ''}</option>)}
-              </select>
+              {fileMode !== 'PRICE_SHEET' ? <>
+                <label htmlFor={'source-column-' + i}>Cột {i+1}</label>
+                <select id={'source-column-' + i}
+                  aria-label={'Chọn dữ liệu cho cột ' + (i+1) + ': ' + (h || 'Không có tiêu đề')}
+                  value={selectedField} onChange={e => chooseColumn(i,e.target.value)}>
+                  <option value="">Không sử dụng</option>
+                  {fieldsAvailableForColumn(kind, columns, fixedValues, i, mixedTransactions)
+                    .map(f => <option key={f.key} value={f.key}>{f.name}</option>)}
+                </select>
+              </> : null}
               <span className="import-original-header" title={h || 'Không có tiêu đề'}>{h || 'Cột ' + (i+1) + ' (trống)'}</span>
             </th>;
           })}</tr></thead><tbody>
@@ -240,10 +278,10 @@ export default function ImportContent({ view }: { view: string }) {
             </tr>)}
           </tbody></table>
         </div>
-        <p>Cuộn ngang để xem toàn bộ {headers.length} cột nguồn; tên cột gốc và dữ liệu mẫu nằm ngay dưới dropdown.</p>
-        {(unmappedRequired.length > 0 || unmappedOptional.length > 0) ? <section className="import-fixed-settings" aria-label="Thông tin chung áp dụng một lần">
-          <h4>3. Thông tin chung cho cả tệp</h4>
-          <p>Chỉ nhập ở đây khi toàn bộ sản phẩm trong tệp có cùng giá trị. Trường đã chọn từ Excel không hiện lần nữa.</p>
+        <p>Hiển thị {headers.length} cột Excel, cuộn ngang nếu cần. Dữ liệu gốc luôn giữ nguyên.</p>
+        {fileMode !== 'PRICE_SHEET' && (unmappedRequired.length > 0 || unmappedOptional.length > 0) ? <section className="import-fixed-settings" aria-label="Thông tin chung áp dụng một lần">
+          <h4>3. Thông tin giống nhau cho cả tệp</h4>
+          <p>Chỉ điền những thông tin giống nhau ở mọi dòng. Nếu dữ liệu mỗi dòng khác nhau, chọn cột Excel phía trên.</p>
           <div className="import-fixed-grid">
             {unmappedRequired.map(field => {
               const value = fixedValues[field.key] ?? '';
@@ -277,24 +315,34 @@ export default function ImportContent({ view }: { view: string }) {
             </div>
           </details> : null}
         </section> : null}
-        {columns.type ? <div className="import-fields">
+        {fileMode !== 'PRICE_SHEET' && columns.type ? <div className="import-fields">
           <label>Giá trị chỉ hàng bán/giao<input value={positive} onChange={(e) => setPositive(e.target.value)} placeholder={kind === 'SALES_IN' ? 'INVOICE' : 'DELIVERED'} /></label>
           <label>Giá trị chỉ hàng trả<input value={returned} onChange={(e) => setReturned(e.target.value)} placeholder="RETURN" /></label>
           <label>Giá trị chỉ hàng hủy<input value={cancelled} onChange={(e) => setCancelled(e.target.value)} placeholder="CANCELLED" /></label>
         </div> : null}
         {active?.hasFormulas ? <p role="note">Tệp có công thức. Những dòng có công thức cần đổi thành giá trị trước khi nhập.</p> : null}
-        <div className="import-actions">
-          <Button appearance="secondary" disabled={busy || !file}
-            onClick={() => { void saveColumnProfile(); }}>Lưu mẫu chọn cột</Button>
-          <Button appearance="primary" disabled={busy || !file} onClick={() => { void doPreview(); }}>
-          {busy ? 'Đang kiểm tra…' : 'Xem trước và kiểm tra dữ liệu'}</Button>
-        </div>
-        <p>Mẫu đã lưu sẽ tự được đề xuất khi nhập lại tệp cùng NPP, loại dữ liệu và cấu trúc cột, kể cả sau khi mở lại ứng dụng.</p>
+        {fileMode !== 'PRICE_SHEET' ? <>
+          {showValidation && (missing.length || invalidFixed.length || missingFinancialSource || (mixedTransactions && !columns.type)) ?
+            <div className="import-validation-note" role="status">
+              {missing.length ? <p>Chưa có: {missing.join(', ')}. Chọn cột Excel hoặc nhập thông tin chung.</p> : null}
+              {invalidFixed.length ? <p>Giá trị cần kiểm tra: {invalidFixed.join(', ')}.</p> : null}
+              {missingFinancialSource ? <p>Để ghi doanh số cần có cột Số lượng thực bán/giao, hoặc cột Số đơn cùng Thành tiền từ Excel.</p> : null}
+              {mixedTransactions && !columns.type ? <p>Đã chọn giao dịch hỗn hợp; hãy chọn cột Bán / Trả hàng.</p> : null}
+            </div> : null}
+          <div className="import-actions">
+            <Button appearance="secondary" disabled={busy || !file}
+              onClick={() => { void saveColumnProfile(); }}>Lưu mẫu chọn cột</Button>
+            <Button appearance="primary" disabled={busy || !file} onClick={() => { void doPreview(); }}>
+              {busy ? 'Đang kiểm tra…' : 'Xem trước và kiểm tra'}</Button>
+          </div>
+        </> : <p role="note" className="import-file-hint">Bảng giá và danh mục chỉ được xem trong phiên bản hiện tại. Không có thao tác lưu doanh số từ chế độ này.</p>}
+        {fileMode !== 'PRICE_SHEET' ? <p>Mẫu cột đã lưu được tự nạp cho cùng NPP và bố cục Excel.</p> : null}
       </>}
     </section> : null}
-    {view === 'Nhập Excel' && previewReady && preview ? <section className="content-panel import-panel">
+    {view === 'Nhập Excel' && fileMode !== 'PRICE_SHEET' && previewReady && preview ? <section className="content-panel import-panel">
       <h3>4. Kiểm tra và xác nhận nhập</h3>
       <>
+        {preview.preflightOnly ? <p role="status" className="import-validation-note">Đã xem được tệp. Chưa kiểm tra doanh số vì thông tin nhập còn thiếu hoặc chưa hợp lệ. Không có dữ liệu nào được lưu.</p> : null}
         <div className="import-stats"><span>Tổng dòng: <strong>{preview.totalRows}</strong></span><span>Hợp lệ: <strong>{preview.validRows}</strong></span>
           <span>Bỏ qua: <strong>{preview.skippedRows}</strong></span><span>Cần sửa: <strong>{preview.errorRows}</strong></span><span>Chưa xác định nhân viên: <strong>{preview.unknownEmployees}</strong></span></div>
         {preview.issues.length>0 ? <div className="import-scroll"><table><thead><tr><th>Dòng</th><th>Cột</th><th>Mức độ</th><th>Lý do / cách xử lý</th></tr></thead><tbody>
@@ -306,7 +354,7 @@ export default function ImportContent({ view }: { view: string }) {
           Tôi xác nhận thay dữ liệu cũ cùng NPP và kỳ đã chọn. Bản cũ được giữ trong lịch sử.
         </label> : null}
         {preview.sameFileAlreadyActive ? <p>Tệp đã được nhập cho kỳ này. Không cần nhập thêm.</p> : null}
-        <Button appearance="primary" disabled={busy || hasErrors || preview.sameFileAlreadyActive || preview.validRows===0 || (preview.hasPrevious&&!replaceOld)}
+        <Button appearance="primary" disabled={busy || preview.preflightOnly || hasErrors || preview.sameFileAlreadyActive || preview.validRows===0 || (preview.hasPrevious&&!replaceOld)}
           onClick={() => {void doCommit();}}>{busy?'Đang lưu…':'Xác nhận nhập dữ liệu chính thức'}</Button>
         <p>Chỉ bấm xác nhận khi mã hàng NPP, đơn vị quy đổi và số liệu đã được kiểm tra. Nhân viên chưa xác định được giữ riêng, không tự phân bổ.</p>
       </>

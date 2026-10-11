@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appearsToBePriceList, hasSourceFinancialEvidence, invalidFixedFields, missingFields, pickHeaderRow, SOURCE_ROW_DOCUMENT, suggestColumns } from './importColumnRules';
+import { appearsToBePriceList, fieldsAvailableForColumn, hasSourceFinancialEvidence, invalidFixedFields, isTransactionSource, missingFields, pickHeaderRow, SOURCE_ROW_DOCUMENT, suggestColumns } from './importColumnRules';
 
 describe('Excel standard field selection', () => {
   it('maps two NPP header formats into the same standard fields', () => {
@@ -33,7 +33,7 @@ describe('fixed metadata for Excel import', () => {
   });
   it('never treats blank or bad constants as complete, and refuses synthetic sales', () => {
     expect(missingFields('SALES_IN', { sku:'@col:0' }, { date: '', document:'X' }))
-      .toContain('Ngày bán / ngày chứng từ');
+      .toContain('Ngày giao dịch');
     expect(invalidFixedFields('SALES_OUT', { date:'2026-02-30', amount:'1,000', quantity:'one' }))
       .toHaveLength(3);
     expect(hasSourceFinancialEvidence({ sku:'@col:0' })).toBe(false);
@@ -53,5 +53,37 @@ describe('header selection without a row picker', () => {
   });
   it('does not fabricate a heading for an empty workbook', () => {
     expect(pickHeaderRow([{row:1,values:['','']}])).toBeUndefined();
+  });
+});
+
+describe('One source for every business field', () => {
+  it('hides shared values and fields already assigned to another Excel column', () => {
+    const columns = { sku: '@col:0', amount: '@col:2' };
+    const fixed = { date: '2026-10-01', unit: 'THUNG', document: 'INV001' };
+    const labels = fieldsAvailableForColumn('SALES_OUT', columns, fixed, 1, false).map(x => x.key);
+    expect(labels).toContain('quantity');
+    expect(labels).not.toContain('date');
+    expect(labels).not.toContain('document');
+    expect(labels).not.toContain('unit');
+    expect(labels).not.toContain('sku');
+    expect(labels).not.toContain('amount');
+    expect(labels).not.toContain('type');
+    expect(fieldsAvailableForColumn('SALES_OUT', columns, fixed, 0, false).map(x => x.key))
+      .toContain('sku');
+  });
+  it('shows the transaction-type column only with explicit mixed-sale selection', () => {
+    expect(fieldsAvailableForColumn('SALES_IN', {}, {}, 0, false).map(x=>x.key)).not.toContain('type');
+    expect(fieldsAvailableForColumn('SALES_IN', {}, {}, 0, true).map(x=>x.key)).toContain('type');
+  });
+  it('requires actual transaction evidence rather than a price alone', () => {
+    expect(isTransactionSource({amount:'@col:4'})).toBe(false);
+    expect(isTransactionSource({document:'@col:1', amount:'@col:4'})).toBe(true);
+    expect(isTransactionSource({quantity:'@col:2'})).toBe(true);
+  });
+  it('uses user-facing Vietnamese field names rather than SQL terms', () => {
+    const found = fieldsAvailableForColumn('SALES_OUT', {}, {}, 0, true);
+    expect(found.find(x=>x.key==='sku')?.name).toBe('Mã hàng');
+    expect(found.find(x=>x.key==='document')?.name).toBe('Số đơn / chứng từ');
+    expect(found.find(x=>x.key==='amount')?.name).toBe('Thành tiền (VND)');
   });
 });

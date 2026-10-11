@@ -316,3 +316,11 @@ button:disabled { cursor: not-allowed; }
   .import-sheet-controls { align-items: stretch; }
   .import-sheet-info { width: 100%; }
 }
+
+/* Import: don't frighten operators for unread source columns. Native preview carries
+   validation issues; only commit remains gated on verified transaction facts. */
+.import-file-hint { border-left: 2px solid var(--brand); background: var(--surface-soft); padding: 8px 10px; font-size: 12px; }
+.import-validation-note { display: grid; gap: 4px; border: 1px solid #e4c99f; background: #fffaf3; padding: 9px 11px; border-radius: 6px; }
+.import-validation-note p { color: #76532a; }
+.import-sheet-controls .import-mixed-option { display: flex; align-items: center; gap: 8px; min-width: 245px; max-width: 330px; font-size: 12px; }
+.import-mixed-option > input { flex: 0 0 auto; width: 17px; height: 17px; accent-color: var(--brand); }

@@ -10,16 +10,52 @@ function Run-Installer($file, $directory) {
     $installer = Start-Process -FilePath $file -ArgumentList "/S /D=$directory" -PassThru -Wait
     Assert-True ($installer.ExitCode -eq 0) "NSIS installer failed (exit code $($installer.ExitCode))"
 }
-function Run-App($file, $label) {
+function Find-AppDatabases {
+    # Tauri resolves app.path().app_data_dir() below the Windows user app-data.
+    # Search both roots to detect unexpected duplicate DBs, not just the expected folder.
+    return @(Get-ChildItem -Path $env:APPDATA, $env:LOCALAPPDATA -Recurse -Filter "sales-supervisor.sqlite3" -File -ErrorAction SilentlyContinue |
+        Sort-Object -Property FullName -Unique)
+}
+function Show-AppDataDiagnostics {
+    Write-Output "Startup diagnostics (runner-local temporary app data only):"
+    foreach ($root in @($env:APPDATA, $env:LOCALAPPDATA)) {
+        Write-Output "  AppData root exists: $(Test-Path $root)"
+        $expected = Join-Path $root "vn.salescenter.supervisor"
+        Write-Output "  Expected identifier folder exists: $(Test-Path $expected)"
+        if (Test-Path $expected) {
+            Get-ChildItem -LiteralPath $expected -Force -ErrorAction SilentlyContinue |
+                Select-Object Name, Length | Format-Table | Out-String | Write-Output
+        }
+    }
+}
+function Run-App($file, $label, [switch]$WaitForFreshDatabase) {
     $proc = Start-Process -FilePath $file -PassThru
     try {
         Start-Sleep -Seconds 7
         $proc.Refresh()
         Assert-True (-not $proc.HasExited) "Native startup failure at $label; exit=$($proc.ExitCode)"
+        if ($WaitForFreshDatabase) {
+            # Windows WebView2 initialization may be slower on a clean CI runner.
+            # Do not kill the app and then assume SQLite had time to initialize.
+            $deadline = [DateTime]::UtcNow.AddSeconds(60)
+            do {
+                $found = @(Find-AppDatabases)
+                if ($found.Count -eq 1) { break }
+                Assert-True ($found.Count -eq 0) "More than one Supervisor DB created during fresh start"
+                $proc.Refresh()
+                Assert-True (-not $proc.HasExited) "App exited before creating its SQLite DB at $label; exit=$($proc.ExitCode)"
+                Start-Sleep -Seconds 2
+            } while ([DateTime]::UtcNow -lt $deadline)
+            if ($found.Count -ne 1) {
+                Show-AppDataDiagnostics
+                throw "SQLite initialization did not complete within 60 seconds at $label; found $($found.Count) DBs"
+            }
+            Write-Output "PASS: SQLite database initialized by native process at $label"
+        }
         Write-Output "PASS: Windows native process started: $label"
-        # CI shell availability is not a visual QA assertion. Screenshot, if any,
-        # is documentary only; actual interactive UX still requires QA evidence.
+        # The shell smoke test is not real interactive Windows UI QA.
     } finally {
+        $proc.Refresh()
         if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
         Start-Sleep -Seconds 2
     }
@@ -36,10 +72,8 @@ Assert-True ($before.Count -eq 0) "CI runner already contains a Supervisor datab
 Run-Installer $installer.FullName $installPath
 $binary = Join-Path $installPath "sales-supervisor.exe"
 Assert-True (Test-Path $binary) "NSIS did not install the application exe"
-Run-App $binary "fresh-install"
-$dbs = @(
-    Get-ChildItem -Path $env:APPDATA, $env:LOCALAPPDATA -Recurse -Filter "sales-supervisor.sqlite3" -File -ErrorAction SilentlyContinue
-)
+Run-App $binary "fresh-install" -WaitForFreshDatabase
+$dbs = @(Find-AppDatabases)
 Assert-True ($dbs.Count -eq 1) "Expected exactly one SQLite app-data DB after launch; found $($dbs.Count)"
 $db = $dbs[0].FullName
 Assert-True (-not $db.StartsWith($installPath, [StringComparison]::OrdinalIgnoreCase)) "Database was created inside install directory"
