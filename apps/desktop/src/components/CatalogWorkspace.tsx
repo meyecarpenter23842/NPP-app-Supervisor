@@ -255,8 +255,9 @@ export default function CatalogWorkspace({ view }: { view: string }) {
     setSkuId(first?.id ?? ''); setEditName(master.families.find(x => x.id === id)?.name ?? ''); };
   function addFamily(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); void mutate(async () => {
-      const created=await desktopApi.createMasterItem({ kind: 'FAMILY', code: familyCode, name: familyName });
-      if (categoryId || brandId) await desktopApi.assignFamilyCatalog({ familyId: created.id, categoryId: categoryId || null, brandId: brandId || null });
+      const created = await desktopApi.createProductFamily({
+        code: familyCode, name: familyName, categoryId: categoryId || null, brandId: brandId || null,
+      });
       setFamilyId(created.id); setFamilyCode(''); setFamilyName('');
     }, 'Đã lưu sản phẩm chuẩn.');
   }
