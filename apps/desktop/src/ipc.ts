@@ -99,7 +99,7 @@ export interface ImportFileView { sheets: ImportSheetView[]; sha256: string }
 export interface ImportIssue { row: number; column: string; severity: 'ERROR' | 'WARNING'; message: string }
 export interface ImportPreview {
   sha256: string;
-  totalRows: number; validRows: number; skippedRows: number; unknownEmployees: number;
+  totalRows: number; validRows: number; skippedRows: number; unknownEmployees: number; errorRows: number;
   issues: ImportIssue[]; sample: ImportRowView[];
   hasPrevious: boolean; sameFileAlreadyActive: boolean;
 }

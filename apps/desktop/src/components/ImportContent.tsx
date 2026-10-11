@@ -110,7 +110,7 @@ export default function ImportContent({ view }: { view: string }) {
     } catch (reason: unknown) { setError(normalizeIpcError(reason).message); }
     finally { setBusy(false); }
   }
-  const hasErrors = preview?.issues.some(x => x.severity === 'ERROR') ?? false;
+  const hasErrors = (preview?.errorRows ?? 0) > 0;
   const previewReady = preview && previewKey === selectionKey;
   return <div className="import-workspace">
     <div className="import-lead"><h2>Nhập dữ liệu bán hàng từ NPP</h2>
@@ -179,7 +179,7 @@ export default function ImportContent({ view }: { view: string }) {
       <h3>3. Kiểm tra và xác nhận nhập</h3>
       {!previewReady ? <p>Chưa có kết quả xem trước, hoặc thông tin đã thay đổi. Vào “Chọn cột Excel” và bấm “Xem trước”.</p> : <>
         <div className="import-stats"><span>Tổng dòng: <strong>{preview.totalRows}</strong></span><span>Hợp lệ: <strong>{preview.validRows}</strong></span>
-          <span>Bỏ qua: <strong>{preview.skippedRows}</strong></span><span>Chưa xác định nhân viên: <strong>{preview.unknownEmployees}</strong></span></div>
+          <span>Bỏ qua: <strong>{preview.skippedRows}</strong></span><span>Cần sửa: <strong>{preview.errorRows}</strong></span><span>Chưa xác định nhân viên: <strong>{preview.unknownEmployees}</strong></span></div>
         {preview.issues.length>0 ? <div className="import-scroll"><table><thead><tr><th>Dòng</th><th>Cột</th><th>Mức độ</th><th>Lý do / cách xử lý</th></tr></thead><tbody>
           {preview.issues.map((item,i) => <tr key={i}><td>{item.row}</td><td>{item.column}</td>
             <td>{item.severity==='ERROR'?'Cần sửa':'Cần kiểm tra'}</td><td>{item.message}</td></tr>)}

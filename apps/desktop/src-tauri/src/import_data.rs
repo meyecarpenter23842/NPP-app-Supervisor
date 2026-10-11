@@ -51,6 +51,7 @@ pub struct Preview {
     skipped_rows:usize,
     unknown_employees:usize,
     issues:Vec<ImportIssue>,
+    error_rows:usize,
     sample:Vec<RowView>,
     has_previous:bool,
     same_file_already_active:bool,
@@ -63,7 +64,7 @@ pub struct ImportResult {id:String,inserted:usize,unresolved:usize,replaced:bool
 pub struct ImportHistory {id:String,kind:String,distributor_name:String,period_from:String,period_to:String,source_file_name:String,source_sheet:Option<String>,status:String,active:bool,total_rows:i64,valid_rows:i64,error_rows:i64,imported_at_utc:String}
 #[derive(Clone)]
 struct Fact {row:usize,sku:String,employee:Option<String>,business_date:String,document:String,line:Option<String>,kind:String,quantity:i64,amount:i64}
-struct Checked {facts:Vec<Fact>,issues:Vec<ImportIssue>,total:usize,skipped:usize,unknown:usize,sha:String,previous:Option<(String,String)>}
+struct Checked {facts:Vec<Fact>,issues:Vec<ImportIssue>,total:usize,skipped:usize,unknown:usize,error_rows:usize,sha:String,previous:Option<(String,String)>}
 
 fn digest(b:&[u8])->String{format!("{:x}",Sha256::digest(b))}
 fn valid_date(d:&str)->bool{
@@ -194,13 +195,12 @@ fn checked(db:&Connection,r:&ImportRequest)->Result<Checked,ImportError>{
     let sheet=selected_sheet(&sheets,r)?;
     let map=column_map(sheet,r)?;
     let mut facts=Vec::new();let mut issues=Vec::new();let mut seen=HashSet::new();
-    let(mut total,mut skipped,mut unknown)=(0usize,0usize,0usize);
+    let(mut total,mut skipped,mut unknown,mut error_rows)=(0usize,0usize,0usize,0usize);
     for (i,cells) in sheet.rows.iter().filter(|(i,_)|*i>r.header_row){
         if cells.iter().all(|c|c.trim().is_empty()){continue;}
         total+=1;
-        let mut errors=false;
         let mut report=|col:&str,msg:&str|{
-            errors=true;
+            error_rows+=1;
             if issues.len()<250 {issues.push(issue(*i,col,"ERROR",msg));}
         };
         if cells.iter().any(|x|x=="[CÔNG THỨC]"){report("Excel","Tệp có công thức tại dòng này. Hãy chuyển thành giá trị trước khi nhập.");continue;}
@@ -216,7 +216,10 @@ fn checked(db:&Connection,r:&ImportRequest)->Result<Checked,ImportError>{
             Some((id,n,d)) if n>0&&d>0=>(id,n,d),
             _=>{report("Mã hàng","Không tìm thấy mã hàng và đơn vị của NPP trong thời gian đã chọn.");continue;}
         };
-        let quantity=match fixed_micro(get(cells,&map,"quantity")){
+        if status!="RETURN" && (get(cells,&map,"quantity").starts_with('-') || get(cells,&map,"amount").starts_with('-')) {
+            report("Số lượng / giá trị","Doanh số bán ra không được âm. Chỉ dòng trả hàng được ghi số âm.");continue;
+        }
+        let quantity=match fixed_micro(get(cells,&map,"quantity").trim_start_matches('-')){
             Some(v)=>v,None=>{report("Số lượng","Số lượng phải là số không âm, tối đa 6 chữ số thập phân.");continue;}
         };
         let adjusted=(quantity as i128).checked_mul(sku.1 as i128).and_then(|v|v.checked_div(sku.2 as i128));
@@ -245,13 +248,12 @@ fn checked(db:&Connection,r:&ImportRequest)->Result<Checked,ImportError>{
         let sign=if status=="RETURN"{-1}else{1};
         facts.push(Fact{row:*i,sku:sku.0,employee,business_date:on,document:doc.into(),
             line:if line.is_empty(){None}else{Some(line.into())},kind:status.into(),quantity:micro*sign,amount:amount*sign});
-        if errors {continue;}
     }
     let previous=active(db,r).map_err(|_|failed())?;
-    Ok(Checked{facts,issues,total,skipped,unknown,sha:digest(&r.bytes),previous})
+    Ok(Checked{facts,issues,total,skipped,unknown,error_rows,sha:digest(&r.bytes),previous})
 }
 fn summarize(c:&Checked)->(usize,usize){
-    let err_count=c.issues.iter().filter(|x|x.severity=="ERROR").count();
+    let err_count=c.error_rows;
     (c.facts.len(),err_count)
 }
 #[tauri::command]
@@ -269,7 +271,7 @@ pub fn preview_import(db:State<'_,AppDatabase>,request:ImportRequest)->Result<Pr
     let db=conn(&db)?;
     let c=checked(&db,&request)?;
     let (valid,_)=summarize(&c);
-    Ok(Preview{sha256:c.sha.clone(),total_rows:c.total,valid_rows:valid,skipped_rows:c.skipped,
+    Ok(Preview{sha256:c.sha.clone(),total_rows:c.total,valid_rows:valid,skipped_rows:c.skipped,error_rows:c.error_rows,
         unknown_employees:c.unknown,issues:c.issues,sample:import_parse::parse(&request.file_name,&request.bytes)
             .map_err(|s|invalid(&s))?.into_iter().find(|s|s.name==request.sheet_name).map(|s|s.rows.into_iter()
             .filter(|(row,_)|*row>request.header_row).take(12).map(|(row,values)|RowView{row,values}).collect()).unwrap_or_default(),
@@ -281,7 +283,7 @@ pub fn commit_import(db:State<'_,AppDatabase>,request:ImportRequest,expected_sha
     let connection=conn(&db)?;
     let tx=connection.unchecked_transaction().map_err(|_|failed())?;
     let c=checked(&tx,&request)?;
-    if c.issues.iter().any(|x|x.severity=="ERROR"){return Err(conflict("Tệp còn dòng lỗi. Hãy kiểm tra và sửa trước khi nhập."));}
+    if c.error_rows>0{return Err(conflict("Tệp còn dòng lỗi. Hãy kiểm tra và sửa trước khi nhập."));}
     if c.facts.is_empty(){return Err(invalid("Tệp không có dòng hợp lệ để nhập."));}
     if let Some((id,hash))=&c.previous {
         if hash==&c.sha{return Ok(ImportResult{id:id.clone(),inserted:0,unresolved:c.unknown,replaced:false,already_imported:true});}
