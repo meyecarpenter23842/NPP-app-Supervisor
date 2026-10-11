@@ -1,4 +1,5 @@
 mod catalog_data;
+mod catalog_import;
 mod commands;
 mod import_data;
 mod import_parse;
@@ -18,6 +19,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::health,
             catalog_data::list_catalog,
+            catalog_import::preview_catalog_import,
+            catalog_import::commit_catalog_import,
+            catalog_import::list_catalog_import_history,
             catalog_data::create_catalog_option,
             catalog_data::assign_family_catalog,
             catalog_data::create_price_list,
