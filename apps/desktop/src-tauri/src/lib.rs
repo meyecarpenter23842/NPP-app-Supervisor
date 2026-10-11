@@ -4,8 +4,8 @@ mod commands;
 mod import_data;
 mod import_parse;
 mod master_data;
-mod storage;
 mod sku_analytics;
+mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
