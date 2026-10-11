@@ -93,6 +93,18 @@ export interface ImportRequest {
   returnValue?: string | null;
   cancelValue?: string | null;
 }
+export interface ImportMappingProfile {
+  columns: Record<string, string>;
+  rowKind: 'INVOICE' | 'DELIVERED' | 'RETURN';
+  positiveValue: string | null;
+  returnValue: string | null;
+  cancelValue: string | null;
+}
+export interface ImportMappingSaveRequest extends ImportMappingProfile {
+  kind: ImportKind;
+  distributorId: string;
+  headers: string[];
+}
 export interface ImportRowView { row: number; values: string[] }
 export interface ImportSheetView { name: string; rows: number; firstRows: ImportRowView[]; hasFormulas: boolean }
 export interface ImportFileView { sheets: ImportSheetView[]; sha256: string }
@@ -134,16 +146,22 @@ export const desktopApi = {
   commitImport: (request: ImportRequest, expectedSha256: string, replaceExisting: boolean) =>
     call<ImportResult>('commit_import', { request, expectedSha256, replaceExisting }),
   listImportHistory: () => call<ImportHistory[]>('list_import_history'),
+  getImportMappingProfile: (kind: ImportKind, distributorId: string, headers: string[]) =>
+    call<ImportMappingProfile | null>('get_import_mapping_profile', { kind, distributorId, headers }),
+  saveImportMappingProfile: (request: ImportMappingSaveRequest) =>
+    call<void>('save_import_mapping_profile', { request }),
 };
 
 type Command = 'health' | 'get_operator' | 'create_operator' | 'update_operator'
   | 'list_master_data' | 'create_master_item' | 'rename_master_item'
-  | 'set_master_active' | 'create_master_link' | 'end_master_link' | 'inspect_import_file' | 'preview_import' | 'commit_import' | 'list_import_history';
-type NativeRequest = OperatorInput | NewMasterItem | NewMasterLink | ImportRequest
+  | 'set_master_active' | 'create_master_link' | 'end_master_link' | 'inspect_import_file' | 'preview_import' | 'commit_import' | 'list_import_history'
+  | 'get_import_mapping_profile' | 'save_import_mapping_profile';
+type NativeRequest = OperatorInput | NewMasterItem | NewMasterLink | ImportRequest | ImportMappingSaveRequest
   | { kind: MasterKind; id: string; name: string }
   | { kind: MasterKind; id: string; active: boolean }
   | { kind: MasterLinkKind; id: string; effectiveTo: string };
-async function call<T>(command: Command, args?: { request?: NativeRequest; fileName?: string; bytes?: number[]; expectedSha256?: string; replaceExisting?: boolean }): Promise<T> {
+async function call<T>(command: Command, args?: { request?: NativeRequest; fileName?: string; bytes?: number[]; expectedSha256?: string; replaceExisting?: boolean;
+  kind?: ImportKind; distributorId?: string; headers?: string[] }): Promise<T> {
   try {
     return await invoke<T>(command, args);
   } catch (cause: unknown) {

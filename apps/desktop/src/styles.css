@@ -263,3 +263,22 @@ button:disabled { cursor: not-allowed; }
 .import-confirm { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
 .import-panel > button { justify-self: start; }
 @media(max-width:800px) { .import-panel { padding: 12px; } }
+
+/* Direct per-source-column mapping for the Excel import workspace. */
+.import-source-table { max-width: 100%; width: 100%; scrollbar-gutter: stable; }
+.import-source-table table { width: max-content; min-width: 100%; table-layout: fixed; }
+.import-source-table .import-row-number { min-width: 76px; width: 76px; position: sticky; left: 0; z-index: 2; background: var(--surface-soft); }
+.import-source-table tbody .import-row-number { background: var(--surface); text-align: center; }
+.import-source-table .import-source-heading { min-width: 188px; width: 188px; vertical-align: top; padding: 8px; }
+.import-source-heading label { display: block; font-size: 11px; color: var(--muted); font-weight: 500; margin-bottom: 5px; }
+.import-source-heading select { width: 100%; max-width: 100%; height: 35px; border: 1px solid #a8bfce; background: var(--surface); color: var(--text); border-radius: 5px; font-size: 12px; padding: 4px; }
+.import-source-heading select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.import-source-heading select:has(option:checked:not([value=""])) { border-color: var(--brand); background: #eef7fc; }
+.import-original-header { display: block; margin-top: 8px; font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-source-table tbody td { min-width: 188px; max-width: 188px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.import-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.import-field-warning { color: #963f2d !important; background: #fff4ed; border-left: 3px solid #bc6548; padding: 8px 10px; }
+.import-field-ready { color: #176741 !important; }
+@media (max-width: 800px) {
+  .import-source-table .import-source-heading, .import-source-table tbody td { min-width: 172px; width: 172px; }
+}

@@ -124,6 +124,8 @@ struct Fact {
     row: usize,
     sku: String,
     employee: Option<String>,
+    route: Option<String>,
+    outlet: Option<String>,
     business_date: String,
     document: String,
     line: Option<String>,
@@ -324,17 +326,27 @@ fn column_map(sheet: &Sheet, r: &ImportRequest) -> Result<HashMap<String, usize>
     for (field, header) in &r.columns {
         if ![
             "date", "sku", "unit", "quantity", "amount", "document", "line", "employee", "type",
+            "route", "outlet",
         ]
         .contains(&field.as_str())
         {
             return Err(invalid("Có loại cột không hợp lệ."));
         }
-        let matches: Vec<_> = headers
-            .iter()
-            .enumerate()
-            .filter(|(_, h)| *h == header)
-            .map(|(i, _)| i)
-            .collect();
+        // Positional source mapping prevents ambiguity when two Excel headers match.
+        // Older import requests using header names remain valid.
+        let matches: Vec<_> = if let Some(source_index) = header.strip_prefix("@col:") {
+            match source_index.parse::<usize>() {
+                Ok(index) if index < headers.len() => vec![index],
+                _ => vec![],
+            }
+        } else {
+            headers
+                .iter()
+                .enumerate()
+                .filter(|(_, h)| *h == header)
+                .map(|(i, _)| i)
+                .collect()
+        };
         if matches.len() != 1 {
             return Err(invalid(
                 "Tên cột bị trùng hoặc không tìm thấy. Hãy chọn lại dòng tiêu đề.",
@@ -417,6 +429,26 @@ fn lookup_employee(
     db.query_row("SELECT employee_id FROM employee_code_aliases
        WHERE distributor_id=?1 AND raw_employee_code=?2 AND effective_from<=?3 AND (effective_to IS NULL OR effective_to>=?3)",
        params![npp,code,on],|row|row.get(0)).optional()
+}
+fn lookup_route(db: &Connection, npp: &str, code: &str) -> rusqlite::Result<Option<String>> {
+    db.query_row(
+        "SELECT id FROM routes WHERE distributor_id=?1 AND code=?2 AND active=1",
+        params![npp, code],
+        |row| row.get(0),
+    )
+    .optional()
+}
+fn lookup_outlet(
+    db: &Connection,
+    npp: &str,
+    code: &str,
+) -> rusqlite::Result<Option<(String, Option<String>)>> {
+    db.query_row(
+        "SELECT id,route_id FROM outlets WHERE distributor_id=?1 AND code=?2 AND active=1",
+        params![npp, code],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()
 }
 fn active(db: &Connection, r: &ImportRequest) -> rusqlite::Result<Option<(String, String)>> {
     db.query_row(
@@ -556,6 +588,45 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             report("Chứng từ", "Trùng dòng chứng từ trong tệp.");
             continue;
         }
+        let route_code = get(cells, &map, "route");
+        let route = if r.kind == "SALES_OUT" && !route_code.is_empty() {
+            match lookup_route(db, &r.distributor_id, route_code).map_err(|_| failed())? {
+                Some(id) => Some(id),
+                None => {
+                    report(
+                        "Mã tuyến",
+                        "Tuyến không thuộc NPP đang chọn hoặc không còn sử dụng.",
+                    );
+                    continue;
+                }
+            }
+        } else {
+            None
+        };
+        let outlet_code = get(cells, &map, "outlet");
+        let outlet = if r.kind == "SALES_OUT" && !outlet_code.is_empty() {
+            match lookup_outlet(db, &r.distributor_id, outlet_code).map_err(|_| failed())? {
+                Some((id, outlet_route)) => {
+                    if route
+                        .as_ref()
+                        .is_some_and(|selected| outlet_route.as_ref() != Some(selected))
+                    {
+                        report("Mã điểm bán", "Điểm bán không thuộc tuyến đã chọn.");
+                        continue;
+                    }
+                    Some(id)
+                }
+                None => {
+                    report(
+                        "Mã điểm bán",
+                        "Điểm bán không thuộc NPP đang chọn hoặc không còn sử dụng.",
+                    );
+                    continue;
+                }
+            }
+        } else {
+            None
+        };
         let staff = get(cells, &map, "employee");
         let employee = if r.kind == "SALES_OUT" && !staff.is_empty() {
             lookup_employee(db, &r.distributor_id, staff, &on).map_err(|_| failed())?
@@ -578,6 +649,8 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             row: *i,
             sku: sku.0,
             employee,
+            route,
+            outlet,
             business_date: on,
             document: doc.into(),
             line: if line.is_empty() {
@@ -606,6 +679,153 @@ fn summarize(c: &Checked) -> (usize, usize) {
     let err_count = c.error_rows;
     (c.facts.len(), err_count)
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportMappingProfile {
+    columns: HashMap<String, String>,
+    row_kind: String,
+    positive_value: Option<String>,
+    return_value: Option<String>,
+    cancel_value: Option<String>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportMappingSaveRequest {
+    kind: String,
+    distributor_id: String,
+    headers: Vec<String>,
+    columns: HashMap<String, String>,
+    row_kind: String,
+    positive_value: Option<String>,
+    return_value: Option<String>,
+    cancel_value: Option<String>,
+}
+fn mapping_name(
+    kind: &str,
+    distributor_id: &str,
+    headers: &[String],
+) -> Result<String, ImportError> {
+    if !["SALES_IN", "SALES_OUT"].contains(&kind)
+        || distributor_id.is_empty()
+        || distributor_id.len() > 100
+        || headers.is_empty()
+        || headers.len() > 100
+        || headers.iter().any(|h| h.len() > 4096)
+    {
+        return Err(invalid("Thông tin mẫu cột Excel không hợp lệ."));
+    }
+    let bytes = serde_json::to_vec(headers).map_err(|_| failed())?;
+    Ok(format!("MAP2:{kind}:{distributor_id}:{}", digest(&bytes)))
+}
+#[tauri::command]
+pub fn get_import_mapping_profile(
+    db: State<'_, AppDatabase>,
+    kind: String,
+    distributor_id: String,
+    headers: Vec<String>,
+) -> Result<Option<ImportMappingProfile>, ImportError> {
+    let key = mapping_name(&kind, &distributor_id, &headers)?;
+    let db = conn(&db)?;
+    let json: Option<String> = db
+        .query_row(
+            "SELECT mapping_json FROM import_profiles WHERE name=?1 AND kind=?2",
+            params![key, kind],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|_| failed())?;
+    json.map(|value| {
+        serde_json::from_str(&value).map_err(|_| invalid("Mẫu cột đã lưu không đọc được."))
+    })
+    .transpose()
+}
+#[tauri::command]
+pub fn save_import_mapping_profile(
+    db: State<'_, AppDatabase>,
+    request: ImportMappingSaveRequest,
+) -> Result<(), ImportError> {
+    let key = mapping_name(&request.kind, &request.distributor_id, &request.headers)?;
+    let required = ["date", "document", "sku", "unit", "quantity", "amount"];
+    if required
+        .iter()
+        .any(|field| request.columns.get(*field).is_none_or(|x| x.is_empty()))
+        || request.columns.len() > 11
+        || !matches!(
+            (request.kind.as_str(), request.row_kind.as_str()),
+            ("SALES_IN", "INVOICE" | "RETURN") | ("SALES_OUT", "DELIVERED" | "RETURN")
+        )
+    {
+        return Err(invalid(
+            "Cần chọn đủ các trường bắt buộc trước khi lưu mẫu.",
+        ));
+    }
+    let mut seen = HashSet::new();
+    for (field, source) in &request.columns {
+        if ![
+            "date", "document", "line", "sku", "unit", "quantity", "amount", "employee", "type",
+            "route", "outlet",
+        ]
+        .contains(&field.as_str())
+            || (request.kind == "SALES_IN"
+                && ["employee", "route", "outlet"].contains(&field.as_str()))
+        {
+            return Err(invalid("Mẫu chứa trường không hợp lệ cho loại dữ liệu."));
+        }
+        let index = if let Some(value) = source.strip_prefix("@col:") {
+            value
+                .parse::<usize>()
+                .ok()
+                .filter(|i| *i < request.headers.len())
+        } else {
+            let positions: Vec<usize> = request
+                .headers
+                .iter()
+                .enumerate()
+                .filter(|(_, h)| *h == source)
+                .map(|(i, _)| i)
+                .collect();
+            if positions.len() == 1 {
+                Some(positions[0])
+            } else {
+                None
+            }
+        };
+        let Some(index) = index else {
+            return Err(invalid("Cột trong mẫu không khớp tệp Excel."));
+        };
+        if !seen.insert(index) {
+            return Err(invalid("Không thể chọn trùng một cột Excel."));
+        }
+    }
+    let profile = ImportMappingProfile {
+        columns: request.columns,
+        row_kind: request.row_kind,
+        positive_value: request.positive_value,
+        return_value: request.return_value,
+        cancel_value: request.cancel_value,
+    };
+    let json = serde_json::to_string(&profile).map_err(|_| failed())?;
+    let db = conn(&db)?;
+    let exists: i64 = db
+        .query_row(
+            "SELECT count(*) FROM distributors WHERE id=?1 AND active=1",
+            [&request.distributor_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| failed())?;
+    if exists != 1 {
+        return Err(invalid("Nhà phân phối chưa có hoặc đã ngừng sử dụng."));
+    }
+    db.execute(
+        "INSERT INTO import_profiles(id,name,kind,version,mapping_json,created_at_utc)
+         VALUES(lower(hex(randomblob(16))),?1,?2,1,?3,strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+         ON CONFLICT(name) DO UPDATE SET mapping_json=excluded.mapping_json,version=import_profiles.version+1",
+        params![key, request.kind, json],
+    ).map_err(|_| failed())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn inspect_import_file(file_name: String, bytes: Vec<u8>) -> Result<FileView, ImportError> {
     let sheets = import_parse::parse(&file_name, &bytes).map_err(|s| invalid(&s))?;
@@ -754,9 +974,9 @@ fn commit_with_conn(
             VALUES(lower(hex(randomblob(16))),?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
             params![id,request.distributor_id,fact.sku,fact.business_date,fact.document,fact.line,fact.kind,fact.quantity,fact.amount,fact.row as i64]).map_err(|_|failed())?;
         } else {
-            tx.execute("INSERT INTO sales_out_facts(id,batch_id,distributor_id,product_id,employee_id,business_date,document_no,document_line_no,kind,quantity_micro,net_amount_vnd,source_row)
-            VALUES(lower(hex(randomblob(16))),?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
-            params![id,request.distributor_id,fact.sku,fact.employee,fact.business_date,fact.document,fact.line,fact.kind,fact.quantity,fact.amount,fact.row as i64]).map_err(|_|failed())?;
+            tx.execute("INSERT INTO sales_out_facts(id,batch_id,distributor_id,product_id,employee_id,route_id,outlet_id,business_date,document_no,document_line_no,kind,quantity_micro,net_amount_vnd,source_row)
+            VALUES(lower(hex(randomblob(16))),?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
+            params![id,request.distributor_id,fact.sku,fact.employee,fact.route,fact.outlet,fact.business_date,fact.document,fact.line,fact.kind,fact.quantity,fact.amount,fact.row as i64]).map_err(|_|failed())?;
         }
     }
     for item in c.issues.iter().filter(|x| x.severity == "WARNING") {
@@ -978,5 +1198,66 @@ mod tests {
         assert_eq!(result.unknown, 1);
         assert!(result.facts[0].employee.is_none());
         assert!(result.issues.iter().any(|i| i.severity == "WARNING"));
+    }
+}
+
+#[cfg(test)]
+mod positional_import_mapping_tests {
+    use super::*;
+    #[test]
+    fn duplicated_source_headers_are_distinguishable_by_position() {
+        let sheet = Sheet {
+            name: "Bán hàng".into(),
+            rows: vec![(1, vec!["Mã".into(), "Mã".into(), "SL".into()])],
+            has_formulas: false,
+        };
+        let mut columns = HashMap::new();
+        columns.insert("sku".into(), "@col:0".into());
+        columns.insert("document".into(), "@col:1".into());
+        let request = ImportRequest {
+            file_name: "test.csv".into(),
+            bytes: vec![],
+            kind: "SALES_OUT".into(),
+            distributor_id: "npp".into(),
+            period_from: "2026-01-01".into(),
+            period_to: "2026-01-31".into(),
+            sheet_name: "Bán hàng".into(),
+            header_row: 1,
+            columns,
+            row_kind: "DELIVERED".into(),
+            positive_value: None,
+            return_value: None,
+            cancel_value: None,
+        };
+        let mapped = column_map(&sheet, &request).unwrap();
+        assert_eq!(mapped["sku"], 0);
+        assert_eq!(mapped["document"], 1);
+    }
+    #[test]
+    fn one_source_column_cannot_fill_two_standard_fields() {
+        let sheet = Sheet {
+            name: "Bán hàng".into(),
+            rows: vec![(1, vec!["Mã".into()])],
+            has_formulas: false,
+        };
+        let mut columns = HashMap::new();
+        columns.insert("sku".into(), "@col:0".into());
+        columns.insert("document".into(), "@col:0".into());
+        let request = ImportRequest {
+            file_name: "test.csv".into(),
+            bytes: vec![],
+            kind: "SALES_OUT".into(),
+            distributor_id: "npp".into(),
+            period_from: "2026-01-01".into(),
+            period_to: "2026-01-31".into(),
+            sheet_name: "Bán hàng".into(),
+            header_row: 1,
+            columns,
+            row_kind: "DELIVERED".into(),
+            positive_value: None,
+            return_value: None,
+            cancel_value: None,
+        };
+        assert!(column_map(&sheet, &request).is_err());
     }
 }
