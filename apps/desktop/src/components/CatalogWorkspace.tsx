@@ -314,6 +314,28 @@ export default function CatalogWorkspace({ view }: { view: string }) {
     }, 'Đã lưu giá tham khảo.');
   }
   if (loading) return <p role="status">Đang đọc danh mục trên máy…</p>;
+  const priceForms = <section className="content-panel catalog-panel">
+      <h2>5. Bảng giá theo NPP</h2>
+      <form onSubmit={addPriceList} className="catalog-form-grid">
+        <label>Mã bảng giá<input required value={listCode} onChange={e => setListCode(e.target.value)} /></label>
+        <label>Tên bảng giá<input required value={listName} onChange={e => setListName(e.target.value)} /></label>
+        <label>Loại giá<input required value={priceType} onChange={e => setPriceType(e.target.value)} placeholder="Chọn mã loại giá theo nghiệp vụ" /></label>
+        <label>Hiệu lực từ<input required type="date" value={listFrom} onChange={e => setListFrom(e.target.value)} /></label>
+        <label>Đến ngày<input type="date" value={listTo} onChange={e => setListTo(e.target.value)} /></label>
+        <button type="submit" disabled={busy || !selectedNpp}>Tạo bảng giá</button>
+      </form>
+      <form onSubmit={addPriceItem} className="catalog-form-grid">
+        <label>Bảng giá<select required value={selectedList} onChange={e => setListId(e.target.value)}>
+          <option value="">Chọn bảng giá</option>{activeLists.map(x => <option key={x.id} value={x.id}>{x.code} · {x.priceType}</option>)}</select></label>
+        <label>Đơn vị giá<select value={unitCode} onChange={e => setUnitCode(e.target.value)}>
+          {registeredUnits.map(x => <option key={x.id} value={x.unitCode ?? ''}>{x.unitCode}</option>)}</select></label>
+        <label>Giá tham khảo (VND)<input required inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></label>
+        <label>Áp dụng từ<input required type="date" value={priceFrom} onChange={e => setPriceFrom(e.target.value)} /></label>
+        <label>Đến ngày<input type="date" value={priceTo} onChange={e => setPriceTo(e.target.value)} /></label>
+        <button type="submit" disabled={busy || !selectedList || !skuId}>Lưu giá</button>
+      </form>
+      <p className="catalog-small">Giá chỉ để tham khảo, không ghi doanh thu Sales In/Out. Trùng khoảng ngày sẽ bị chặn.</p>
+    </section>;
   const forms = <div className="catalog-steps">
     <section className="content-panel catalog-panel">
       <h2>1. Sản phẩm chuẩn</h2><p>Danh mục chung giữa các NPP. Chọn sản phẩm ở cột bên trái hoặc thêm mới.</p>
@@ -372,28 +394,8 @@ export default function CatalogWorkspace({ view }: { view: string }) {
       <div className="catalog-chips">{skuAliases.map(x => <span key={x.id}>{master.distributors.find(n => n.id === x.distributorId)?.code ?? 'NPP'}:
         {x.externalCode} ({x.unitCode}) · {x.effectiveFrom}</span>)}</div>
     </section>
-    <section className="content-panel catalog-panel">
-      <h2>5. Bảng giá theo NPP</h2>
-      <form onSubmit={addPriceList} className="catalog-form-grid">
-        <label>Mã bảng giá<input required value={listCode} onChange={e => setListCode(e.target.value)} /></label>
-        <label>Tên bảng giá<input required value={listName} onChange={e => setListName(e.target.value)} /></label>
-        <label>Loại giá<input required value={priceType} onChange={e => setPriceType(e.target.value)} placeholder="Chọn mã loại giá theo nghiệp vụ" /></label>
-        <label>Hiệu lực từ<input required type="date" value={listFrom} onChange={e => setListFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={listTo} onChange={e => setListTo(e.target.value)} /></label>
-        <button type="submit" disabled={busy || !selectedNpp}>Tạo bảng giá</button>
-      </form>
-      <form onSubmit={addPriceItem} className="catalog-form-grid">
-        <label>Bảng giá<select required value={selectedList} onChange={e => setListId(e.target.value)}>
-          <option value="">Chọn bảng giá</option>{activeLists.map(x => <option key={x.id} value={x.id}>{x.code} · {x.priceType}</option>)}</select></label>
-        <label>Đơn vị giá<select value={unitCode} onChange={e => setUnitCode(e.target.value)}>
-          {registeredUnits.map(x => <option key={x.id} value={x.unitCode ?? ''}>{x.unitCode}</option>)}</select></label>
-        <label>Giá tham khảo (VND)<input required inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></label>
-        <label>Áp dụng từ<input required type="date" value={priceFrom} onChange={e => setPriceFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={priceTo} onChange={e => setPriceTo(e.target.value)} /></label>
-        <button type="submit" disabled={busy || !selectedList || !skuId}>Lưu giá</button>
-      </form>
-      <p className="catalog-small">Giá chỉ để tham khảo, không ghi doanh thu Sales In/Out. Trùng khoảng ngày sẽ bị chặn.</p>
-    </section>
+    {priceForms}
+
   </div>;
   return <div className="catalog-workspace">
     <ErrorLine error={error} notice={notice} />
@@ -444,7 +446,7 @@ export default function CatalogWorkspace({ view }: { view: string }) {
             <td>{x.effectiveTo ?? 'Chưa kết thúc'}</td><td>{x.active ? 'Đang dùng' : 'Ngừng dùng'}</td></tr>)}</tbody></table></div>
         <p className="catalog-small">Giá theo ngày và loại giá do người sử dụng chọn. Nếu có nhiều giá phù hợp, phải đối chiếu bảng giá nguồn.</p>
       </div>
-      {forms.props.children?.[4]}
+      {priceForms}
       <section className="content-panel catalog-panel"><h2>Kết thúc kỳ giá</h2>
         <form className="catalog-form-grid" onSubmit={e => {e.preventDefault(); if (!closeId) return;
           void mutate(() => desktopApi.closePriceItem({ id: closeId, effectiveTo: closeDate }), 'Đã kết thúc kỳ giá.'); }}>
