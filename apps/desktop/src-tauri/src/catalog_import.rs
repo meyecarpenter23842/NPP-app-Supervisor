@@ -384,7 +384,7 @@ pub struct CatalogBatchRequest {
     distributor_id: Option<String>,
     price_list_id: Option<String>,
 }
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CatalogRowStatus {
     row: usize,
@@ -567,12 +567,14 @@ fn run(
             Ok((id, action, key)) => {
                 if !seen.insert(key) {
                     preview.error_rows += 1;
+                    let issue = CatalogRowStatus {
+                        row: number,
+                        status: "ERROR",
+                        message: "Dòng dữ liệu bị lặp ngay trong tệp.".into(),
+                    };
+                    preview.sample.push(issue.clone());
                     if preview.issues.len() < 100 {
-                        preview.issues.push(CatalogRowStatus {
-                            row: number,
-                            status: "ERROR",
-                            message: "Dòng dữ liệu bị lặp ngay trong tệp.".into(),
-                        });
+                        preview.issues.push(issue);
                     }
                     continue;
                 }
@@ -581,8 +583,7 @@ fn run(
                 } else {
                     preview.unchanged_rows += 1;
                 }
-                if preview.sample.len() < 50 {
-                    preview.sample.push(CatalogRowStatus {
+                preview.sample.push(CatalogRowStatus {
                         row: number,
                         status: action,
                         message: if action == "ADDED" {
@@ -591,17 +592,18 @@ fn run(
                             "Đã có, không ghi trùng".into()
                         },
                     });
-                }
                 events.push((number, action, id));
             }
             Err(e) => {
                 preview.error_rows += 1;
+                let issue = CatalogRowStatus {
+                    row: number,
+                    status: "ERROR",
+                    message: e.message,
+                };
+                preview.sample.push(issue.clone());
                 if preview.issues.len() < 100 {
-                    preview.issues.push(CatalogRowStatus {
-                        row: number,
-                        status: "ERROR",
-                        message: e.message,
-                    });
+                    preview.issues.push(issue);
                 }
             }
         }
