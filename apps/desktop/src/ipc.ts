@@ -94,6 +94,7 @@ export type CatalogSnapshot = {
 };
 export type CatalogMutation = { id: string };
 export type NewCatalogOption = { kind: CatalogOptionKind; code: string; name: string };
+export type NewProductFamily = { code: string; name: string; categoryId?: string | null; brandId?: string | null };
 export type AssignFamilyCatalog = { familyId: string; categoryId?: string | null; brandId?: string | null };
 export type NewPriceList = {
   distributorId: string; code: string; name: string; priceType: string;
@@ -195,6 +196,8 @@ export const desktopApi = {
   updateOperator: (request: OperatorInput) =>
     call<LocalOperator>('update_operator', { request }),
   listCatalog: () => call<CatalogSnapshot>('list_catalog'),
+  createProductFamily: (request: NewProductFamily) =>
+    call<CatalogMutation>('create_product_family', { request }),
   createCatalogOption: (request: NewCatalogOption) =>
     call<CatalogMutation>('create_catalog_option', { request }),
   assignFamilyCatalog: (request: AssignFamilyCatalog) =>
@@ -231,13 +234,13 @@ export const desktopApi = {
     call<void>('save_import_mapping_profile', { request }),
 };
 
-type Command = 'preview_catalog_import' | 'commit_catalog_import' | 'list_catalog_import_history' | 'list_catalog' | 'create_catalog_option' | 'assign_family_catalog'
+type Command = 'create_product_family' | 'preview_catalog_import' | 'commit_catalog_import' | 'list_catalog_import_history' | 'list_catalog' | 'create_catalog_option' | 'assign_family_catalog'
   | 'create_price_list' | 'create_price_item' | 'close_price_item' | 'resolve_catalog_sku'
   | 'health' | 'get_operator' | 'create_operator' | 'update_operator'
   | 'list_master_data' | 'create_master_item' | 'rename_master_item'
   | 'set_master_active' | 'create_master_link' | 'end_master_link' | 'inspect_import_file' | 'preview_import' | 'commit_import' | 'list_import_history'
   | 'get_import_mapping_profile' | 'save_import_mapping_profile';
-type NativeRequest = CatalogImportRequest | NewCatalogOption | AssignFamilyCatalog | NewPriceList | NewPriceItem
+type NativeRequest = NewProductFamily | CatalogImportRequest | NewCatalogOption | AssignFamilyCatalog | NewPriceList | NewPriceItem
   | ResolveCatalogRequest | { id: string; effectiveTo: string }
   | OperatorInput | NewMasterItem | NewMasterLink | ImportRequest | ImportMappingSaveRequest
   | { kind: MasterKind; id: string; name: string }
