@@ -77,6 +77,46 @@ export type NewMasterLink = {
 };
 export type MasterMutation = { id: string };
 
+
+export type CatalogOptionKind = 'CATEGORY' | 'BRAND' | 'UNIT';
+export type CatalogOption = { id: string; code: string; name: string; active: boolean };
+export type PriceList = {
+  id: string; distributorId: string; code: string; name: string; priceType: string;
+  effectiveFrom: string; effectiveTo: string | null; active: boolean;
+};
+export type PriceItem = {
+  id: string; priceListId: string; productId: string; unitCode: string; amountVnd: number;
+  effectiveFrom: string; effectiveTo: string | null; sourceNote: string | null; active: boolean;
+};
+export type CatalogSnapshot = {
+  categories: CatalogOption[]; brands: CatalogOption[]; units: CatalogOption[];
+  priceLists: PriceList[]; priceItems: PriceItem[];
+};
+export type CatalogMutation = { id: string };
+export type NewCatalogOption = { kind: CatalogOptionKind; code: string; name: string };
+export type AssignFamilyCatalog = { familyId: string; categoryId?: string | null; brandId?: string | null };
+export type NewPriceList = {
+  distributorId: string; code: string; name: string; priceType: string;
+  effectiveFrom: string; effectiveTo?: string | null;
+};
+export type NewPriceItem = {
+  priceListId: string; productId: string; unitCode: string; amountVnd: number;
+  effectiveFrom: string; effectiveTo?: string | null; sourceNote?: string | null;
+};
+export type ResolveCatalogRequest = {
+  distributorId: string; rawSkuCode: string; rawUnit: string; businessDate: string;
+  priceType?: string | null;
+};
+export type CatalogResolution = {
+  skuStatus: 'FOUND' | 'NOT_FOUND' | 'AMBIGUOUS';
+  product: null | {
+    id: string; skuCode: string; skuName: string; familyName: string | null;
+    baseUnit: string; conversionNum: number; conversionDen: number;
+  };
+  priceStatus: 'FOUND' | 'NOT_FOUND' | 'AMBIGUOUS' | 'NOT_REQUESTED';
+  referencePrice: null | { priceListId: string; amountVnd: number; unitCode: string };
+};
+
 export type ImportKind = 'SALES_IN' | 'SALES_OUT';
 export interface ImportRequest {
   fileName: string;
@@ -136,6 +176,19 @@ export const desktopApi = {
     call<LocalOperator>('create_operator', { request }),
   updateOperator: (request: OperatorInput) =>
     call<LocalOperator>('update_operator', { request }),
+  listCatalog: () => call<CatalogSnapshot>('list_catalog'),
+  createCatalogOption: (request: NewCatalogOption) =>
+    call<CatalogMutation>('create_catalog_option', { request }),
+  assignFamilyCatalog: (request: AssignFamilyCatalog) =>
+    call<CatalogMutation>('assign_family_catalog', { request }),
+  createPriceList: (request: NewPriceList) =>
+    call<CatalogMutation>('create_price_list', { request }),
+  createPriceItem: (request: NewPriceItem) =>
+    call<CatalogMutation>('create_price_item', { request }),
+  closePriceItem: (request: { id: string; effectiveTo: string }) =>
+    call<CatalogMutation>('close_price_item', { request }),
+  resolveCatalogSku: (request: ResolveCatalogRequest) =>
+    call<CatalogResolution>('resolve_catalog_sku', { request }),
   listMasterData: () => call<MasterSnapshot>('list_master_data'),
   createMasterItem: (request: NewMasterItem) => call<MasterMutation>('create_master_item', { request }),
   renameMasterItem: (request: { kind: MasterKind; id: string; name: string }) => call<MasterMutation>('rename_master_item', { request }),
@@ -155,11 +208,15 @@ export const desktopApi = {
     call<void>('save_import_mapping_profile', { request }),
 };
 
-type Command = 'health' | 'get_operator' | 'create_operator' | 'update_operator'
+type Command = 'list_catalog' | 'create_catalog_option' | 'assign_family_catalog'
+  | 'create_price_list' | 'create_price_item' | 'close_price_item' | 'resolve_catalog_sku'
+  | 'health' | 'get_operator' | 'create_operator' | 'update_operator'
   | 'list_master_data' | 'create_master_item' | 'rename_master_item'
   | 'set_master_active' | 'create_master_link' | 'end_master_link' | 'inspect_import_file' | 'preview_import' | 'commit_import' | 'list_import_history'
   | 'get_import_mapping_profile' | 'save_import_mapping_profile';
-type NativeRequest = OperatorInput | NewMasterItem | NewMasterLink | ImportRequest | ImportMappingSaveRequest
+type NativeRequest = NewCatalogOption | AssignFamilyCatalog | NewPriceList | NewPriceItem
+  | ResolveCatalogRequest | { id: string; effectiveTo: string }
+  | OperatorInput | NewMasterItem | NewMasterLink | ImportRequest | ImportMappingSaveRequest
   | { kind: MasterKind; id: string; name: string }
   | { kind: MasterKind; id: string; active: boolean }
   | { kind: MasterLinkKind; id: string; effectiveTo: string };

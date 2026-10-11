@@ -14,12 +14,14 @@ with sqlite3.connect(db_path) as db:
     db.execute("PRAGMA foreign_keys = ON")
     assert db.execute("PRAGMA foreign_keys").fetchone() == (1,)
     versions = [row[0] for row in db.execute("SELECT version FROM schema_migrations ORDER BY version")]
-    assert versions == ["001", "002", "003", "004"], versions
+    assert versions == ["001", "002", "003", "004", "005"], versions
 
     # Installed app must include M2.1 schema, not merely the migration number.
     expected_tables = {
         "product_families", "sku_unit_conversions", "employee_code_aliases",
         "employee_hierarchy_assignments", "employee_route_assignments",
+        "catalog_categories", "catalog_brands", "catalog_units",
+        "price_lists", "price_list_items",
     }
     actual_tables = {row[0] for row in db.execute(
         "SELECT name FROM sqlite_master WHERE type='table'"
@@ -37,6 +39,11 @@ with sqlite3.connect(db_path) as db:
         db.execute("INSERT INTO product_families(id,code,name) VALUES ('ci-family','CI-FAMILY','CI Product')")
         db.execute("INSERT INTO products(id,sku_code,name,base_unit,product_family_id) VALUES ('ci-sku','CI-SKU','CI SKU','LON','ci-family')")
         db.execute("INSERT INTO sku_aliases(id,distributor_id,raw_sku_code,product_id,raw_unit,conversion_num,conversion_den,effective_from) VALUES ('ci-sku-alias','ci-npp','0007','ci-sku','THUNG',24,1,'2026-01-01')")
+        # Price list and declared source package unit must survive native app lifecycle.
+        db.execute("INSERT INTO sku_unit_conversions(id,product_id,unit_code,conversion_num,conversion_den) VALUES ('ci-unit-conversion','ci-sku','THUNG',24,1)")
+        db.execute("INSERT INTO catalog_units(id,code,name) VALUES ('ci-unit','THUNG','Thùng')")
+        db.execute("INSERT INTO price_lists(id,distributor_id,code,name,price_type,effective_from) VALUES ('ci-list','ci-npp','LIST1','CI reference prices','OUT','2026-01-01')")
+        db.execute("INSERT INTO price_list_items(id,price_list_id,product_id,unit_code,amount_vnd,effective_from) VALUES ('ci-price','ci-list','ci-sku','THUNG',240000,'2026-01-01')")
         db.execute("INSERT INTO employees(id,code,full_name,role) VALUES ('ci-sales','0009','CI Sales','SALES')")
         db.execute("INSERT INTO employee_code_aliases(id,distributor_id,raw_employee_code,employee_id,effective_from) VALUES ('ci-staff-alias','ci-npp','0009','ci-sales','2026-01-01')")
     else:
@@ -53,6 +60,11 @@ with sqlite3.connect(db_path) as db:
             "FROM sku_aliases a JOIN distributors d ON d.id=a.distributor_id "
             "WHERE a.id='ci-sku-alias'"
         ).fetchone() == ("0001", "0007", "THUNG", 24, 1)
+        assert db.execute(
+            "SELECT pl.distributor_id,pl.price_type,i.product_id,i.unit_code,i.amount_vnd "
+            "FROM price_list_items i JOIN price_lists pl ON pl.id=i.price_list_id "
+            "WHERE i.id='ci-price'"
+        ).fetchone() == ("ci-npp", "OUT", "ci-sku", "THUNG", 240000)
         assert db.execute(
             "SELECT e.role,a.raw_employee_code FROM employee_code_aliases a "
             "JOIN employees e ON e.id=a.employee_id WHERE a.id='ci-staff-alias'"

@@ -15,6 +15,7 @@ const SCHEMA_001: &str = include_str!("../../../../database/001_initial_schema.s
 const SCHEMA_002: &str = include_str!("../../../../database/migrations/002_local_operator.sql");
 const SCHEMA_003: &str = include_str!("../../../../database/migrations/003_master_data.sql");
 const SCHEMA_004: &str = include_str!("../../../../database/migrations/004_import_archives.sql");
+const SCHEMA_005: &str = include_str!("../../../../database/migrations/005_catalog_prices.sql");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OperatorRole {
@@ -257,6 +258,7 @@ fn migrate(conn: &Connection, app_data: &Path) -> Result<()> {
             "002" => sha256(SCHEMA_002),
             "003" => sha256(SCHEMA_003),
             "004" => sha256(SCHEMA_004),
+            "005" => sha256(SCHEMA_005),
             _ => return Err(format!("unsupported newer migration: {v}").into()),
         };
         if *digest != expected {
@@ -324,6 +326,22 @@ fn migrate(conn: &Connection, app_data: &Path) -> Result<()> {
         }
         tx.commit()?;
     }
+    if !versions.iter().any(|(v, _)| v == "005") {
+        if !new_database && !backup_made {
+            snapshot(conn, app_data)?;
+        }
+        let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(SCHEMA_005)?;
+        write_ledger(&tx, "005", SCHEMA_005)?;
+        let violations: i64 =
+            tx.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })?;
+        if violations != 0 {
+            return Err(format!("{violations} foreign-key violations").into());
+        }
+        tx.commit()?;
+    }
     check_integrity(conn)?;
     ensure_foreign_keys(conn)?;
     Ok(())
@@ -356,7 +374,7 @@ mod tests {
                 assert_eq!(
                     c.query_row("SELECT count(*) FROM schema_migrations", [], |r| r
                         .get::<_, i64>(0))?,
-                    4
+                    5
                 );
                 assert!(c.execute(
                     "INSERT INTO local_operator(id,display_name,role,created_at_utc) VALUES(2,'bad','SALES','2026')",[]
@@ -381,6 +399,79 @@ mod tests {
         assert!(AppDatabase::open(d.path()).is_err());
         drop(first);
         AppDatabase::open(d.path())?;
+        Ok(())
+    }
+
+    #[test]
+    fn upgrade_from_004_preserves_skus_and_backfills_catalog() -> Result<()> {
+        let d = tempdir()?;
+        let path = d.path().join("sales-supervisor.sqlite3");
+        {
+            let c = Connection::open(&path)?;
+            c.execute_batch(SCHEMA_001)?;
+            c.execute_batch(
+                "ALTER TABLE schema_migrations ADD COLUMN checksum TEXT NOT NULL DEFAULT '';",
+            )?;
+            c.pragma_update(None, "foreign_keys", "OFF")?;
+            c.execute_batch(SCHEMA_002)?;
+            c.pragma_update(None, "foreign_keys", "ON")?;
+            c.execute_batch(SCHEMA_003)?;
+            c.execute_batch(SCHEMA_004)?;
+            for (version, schema) in [
+                ("001", SCHEMA_001),
+                ("002", SCHEMA_002),
+                ("003", SCHEMA_003),
+                ("004", SCHEMA_004),
+            ] {
+                c.execute(
+                    "INSERT INTO schema_migrations(version,checksum,applied_at_utc)
+                     VALUES(?1,?2,'2026')",
+                    params![version, sha256(schema)],
+                )?;
+            }
+            c.execute_batch(
+                "INSERT INTO distributors(id,code,name,created_at_utc)
+                  VALUES('npp','N1','NPP 1','2026');
+                 INSERT INTO product_families(id,code,name,category,brand)
+                  VALUES('family','F','Sản phẩm','Đồ uống','Nhãn A');
+                 INSERT INTO products(id,sku_code,name,category,base_unit,product_family_id)
+                  VALUES('sku','0007','Tên SKU','Nước giải khát','LON','family');
+                 INSERT INTO sku_unit_conversions
+                  (id,product_id,unit_code,conversion_num,conversion_den)
+                  VALUES('base','sku','LON',1,1);
+                 INSERT INTO sku_aliases
+                  (id,distributor_id,raw_sku_code,product_id,raw_unit,conversion_num,conversion_den)
+                  VALUES('alias','npp','0007','sku','LON',1,1);",
+            )?;
+        }
+
+        let db = AppDatabase::open(d.path())?;
+        let c = db.connection.lock().unwrap();
+        let (sku_id, source_code): (String, String) = c.query_row(
+            "SELECT product_id,raw_sku_code FROM sku_aliases WHERE id='alias'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        assert_eq!((sku_id.as_str(), source_code.as_str()), ("sku", "0007"));
+        let family: (String, String) = c.query_row(
+            "SELECT c.name,b.name FROM product_families f
+             JOIN catalog_categories c ON c.id=f.category_id
+             JOIN catalog_brands b ON b.id=f.brand_id WHERE f.id='family'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        assert_eq!(family, ("Đồ uống".into(), "Nhãn A".into()));
+        let source_category_count: i64 = c.query_row(
+            "SELECT count(*) FROM catalog_categories WHERE name='Nước giải khát'",
+            [],
+            |r| r.get(0),
+        )?;
+        assert_eq!(source_category_count, 1);
+        let version_count: i64 =
+            c.query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))?;
+        assert_eq!(version_count, 5);
+        ensure_foreign_keys(&c)?;
+        assert!(d.path().join("backups").read_dir()?.next().is_some());
         Ok(())
     }
 
