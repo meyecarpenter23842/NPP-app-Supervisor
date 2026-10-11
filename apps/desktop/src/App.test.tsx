@@ -62,7 +62,7 @@ describe('M1.5 sidebar navigation and business screens', () => {
     const src = renderToStaticMarkup(<Workspace operator={operator} onUpdate={async () => {}} />);
     expect(src).not.toContain('Bộ lọc báo cáo');
     expect(src).not.toContain('Chưa có kỳ dữ liệu');
-    expect(src).not.toContain('Chưa có nguồn');
+    expect(src).not.toContain('class="context-trailing"');
     expect(src).not.toContain('Chưa có dữ liệu để lọc');
     expect(src).not.toContain('aria-label="Kỳ dữ liệu"');
     expect(src).not.toContain('aria-label="Nhà phân phối"');
