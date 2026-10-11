@@ -588,23 +588,6 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
             report("Chứng từ", "Trùng dòng chứng từ trong tệp.");
             continue;
         }
-        let staff = get(cells, &map, "employee");
-        let employee = if r.kind == "SALES_OUT" && !staff.is_empty() {
-            lookup_employee(db, &r.distributor_id, staff, &on).map_err(|_| failed())?
-        } else {
-            None
-        };
-        if r.kind == "SALES_OUT" && employee.is_none() {
-            unknown += 1;
-            if issues.len() < 250 {
-                issues.push(issue(
-                    *i,
-                    "Nhân viên",
-                    "WARNING",
-                    "Chưa xác định nhân viên từ mã NPP; doanh số vẫn được giữ riêng.",
-                ));
-            }
-        }
         let route_code = get(cells, &map, "route");
         let route = if r.kind == "SALES_OUT" && !route_code.is_empty() {
             match lookup_route(db, &r.distributor_id, route_code).map_err(|_| failed())? {
@@ -644,6 +627,23 @@ fn checked(db: &Connection, r: &ImportRequest) -> Result<Checked, ImportError> {
         } else {
             None
         };
+        let staff = get(cells, &map, "employee");
+        let employee = if r.kind == "SALES_OUT" && !staff.is_empty() {
+            lookup_employee(db, &r.distributor_id, staff, &on).map_err(|_| failed())?
+        } else {
+            None
+        };
+        if r.kind == "SALES_OUT" && employee.is_none() {
+            unknown += 1;
+            if issues.len() < 250 {
+                issues.push(issue(
+                    *i,
+                    "Nhân viên",
+                    "WARNING",
+                    "Chưa xác định nhân viên từ mã NPP; doanh số vẫn được giữ riêng.",
+                ));
+            }
+        }
         let sign = if status == "RETURN" { -1 } else { 1 };
         facts.push(Fact {
             row: *i,
