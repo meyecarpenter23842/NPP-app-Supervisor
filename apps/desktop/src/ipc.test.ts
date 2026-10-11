@@ -17,7 +17,7 @@ describe('allowlisted typed desktop IPC', () => {
       ['create_operator', { request: input }],
     ]);
     expect(Object.keys(desktopApi)).toEqual(['health', 'getOperator', 'createOperator', 'updateOperator',
-      'listCatalog', 'createCatalogOption', 'assignFamilyCatalog', 'createPriceList', 'createPriceItem', 'closePriceItem', 'resolveCatalogSku',
+      'listCatalog', 'createProductFamily', 'createCatalogOption', 'assignFamilyCatalog', 'createPriceList', 'createPriceItem', 'closePriceItem', 'resolveCatalogSku',
       'previewCatalogImport', 'commitCatalogImport', 'listCatalogImportHistory',
       'listMasterData', 'createMasterItem', 'renameMasterItem', 'setMasterActive', 'createMasterLink', 'endMasterLink',
       'inspectImportFile', 'previewImport', 'commitImport', 'listImportHistory', 'getImportMappingProfile', 'saveImportMappingProfile']);
