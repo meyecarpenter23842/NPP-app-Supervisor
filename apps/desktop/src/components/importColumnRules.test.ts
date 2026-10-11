@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appearsToBePriceList, hasSourceFinancialEvidence, invalidFixedFields, missingFields, SOURCE_ROW_DOCUMENT, suggestColumns } from './importColumnRules';
+import { appearsToBePriceList, hasSourceFinancialEvidence, invalidFixedFields, missingFields, pickHeaderRow, SOURCE_ROW_DOCUMENT, suggestColumns } from './importColumnRules';
 
 describe('Excel standard field selection', () => {
   it('maps two NPP header formats into the same standard fields', () => {
@@ -18,6 +18,7 @@ describe('Excel standard field selection', () => {
   });
   it('recognizes a price-only workbook but not a transactional file with unit price', () => {
     expect(appearsToBePriceList(['SKU', 'Đơn giá', 'Giá bán'])).toBe(true);
+    expect(appearsToBePriceList(['Mã SP', 'Tên SP', 'SKU', 'Quy cách', 'ĐVT', 'Giá nền', 'GT01 - Bảng Giá Đại Lý'])).toBe(true);
     expect(appearsToBePriceList(['SKU', 'Đơn giá', 'Ngày bán', 'Số lượng'])).toBe(false);
   });
 });
@@ -39,5 +40,18 @@ describe('fixed metadata for Excel import', () => {
   });
   it('keeps source document codes as text without coercion', () => {
     expect(invalidFixedFields('SALES_IN', { document:'000045', unit:'LON' })).toEqual([]);
+  });
+});
+
+describe('header selection without a row picker', () => {
+  it('takes the first populated row and preserves its Excel row index', () => {
+    expect(pickHeaderRow([
+      { row: 1, values: ['', '', ''] },
+      { row: 2, values: ['Mã SP', 'SKU', 'ĐVT'] },
+      { row: 3, values: ['0007', '0007', 'HỘP'] },
+    ])).toEqual({ row: 2, values: ['Mã SP', 'SKU', 'ĐVT'] });
+  });
+  it('does not fabricate a heading for an empty workbook', () => {
+    expect(pickHeaderRow([{row:1,values:['','']}])).toBeUndefined();
   });
 });

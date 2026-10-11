@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'rea
 import { Button } from '@fluentui/react-components';
 import { desktopApi, normalizeIpcError, type ImportFileView, type ImportHistory,
   type ImportKind, type ImportPreview, type ImportRequest, type MasterItem } from '../ipc';
-import { appearsToBePriceList, fieldsFor, hasSourceFinancialEvidence, invalidFixedFields, missingFields, SOURCE_ROW_DOCUMENT, suggestColumns } from './importColumnRules';
+import { appearsToBePriceList, fieldsFor, hasSourceFinancialEvidence, invalidFixedFields, missingFields, pickHeaderRow, SOURCE_ROW_DOCUMENT, suggestColumns } from './importColumnRules';
 
 const kindName: Record<ImportKind, string> = { SALES_IN: 'Sales In (bán vào)', SALES_OUT: 'Sales Out (bán ra)' };
 const emptySelection: Record<string, string> = {};
@@ -14,7 +14,6 @@ export default function ImportContent({ view }: { view: string }) {
   const [file, setFile] = useState<{ name: string; bytes: number[] } | null>(null);
   const [workbook, setWorkbook] = useState<ImportFileView | null>(null);
   const [sheet, setSheet] = useState('');
-  const [headerRow, setHeaderRow] = useState(1);
   const [columns, setColumns] = useState<Record<string, string>>(emptySelection);
   const [fixedValues, setFixedValues] = useState<Record<string, string>>({});
   const [kind, setKind] = useState<ImportKind>('SALES_OUT');
@@ -44,12 +43,17 @@ export default function ImportContent({ view }: { view: string }) {
     return () => { mounted = false; };
   }, []);
   const active = workbook?.sheets.find(x => x.name === sheet);
-  const headers = useMemo(() => active?.firstRows.find(x => x.row === headerRow)?.values ?? [], [active,headerRow]);
+  // Header is the first populated row of the selected sheet. No manual row picker.
+  const firstHeader = useMemo(() => pickHeaderRow(active?.firstRows ?? []), [active]);
+  const headerRow = firstHeader?.row ?? 1;
+  const headers = firstHeader?.values ?? [];
   const selectedColumns = useMemo(() => Object.fromEntries(Object.entries(columns).filter(([,v]) => v !== '')), [columns]);
   const missing = missingFields(kind, selectedColumns, fixedValues);
   const invalidFixed = invalidFixedFields(kind, fixedValues);
   const missingFinancialSource = !hasSourceFinancialEvidence(selectedColumns);
   const invalidFileType = appearsToBePriceList(headers);
+  const unmappedRequired = fieldsFor(kind).filter(field => field.required && !columns[field.key]);
+  const unmappedOptional = fieldsFor(kind).filter(field => !field.required && field.key !== 'type' && !columns[field.key]);
   useEffect(() => {
     if (!nppId || headers.length === 0) return;
     let current = true;
@@ -68,25 +72,6 @@ export default function ImportContent({ view }: { view: string }) {
       .catch((reason: unknown) => { if (current) setError(normalizeIpcError(reason).message); });
     return () => { current = false; };
   }, [kind, nppId, headers]);
-  function chooseSource(field: string, nextValue: string) {
-    const selected = nextValue.startsWith('@col:');
-    setColumns(old => {
-      const next = { ...old };
-      delete next[field];
-      if (selected && !Object.entries(next).some(([, value]) => value === nextValue)) {
-        next[field] = nextValue;
-      }
-      return next;
-    });
-    setFixedValues(old => {
-      const next = { ...old };
-      if (nextValue === '@fixed') next[field] = old[field] === SOURCE_ROW_DOCUMENT ? '' : (old[field] ?? '');
-      else if (nextValue === '@generated' && field === 'document') next[field] = SOURCE_ROW_DOCUMENT;
-      else delete next[field];
-      return next;
-    });
-    setPreview(null); setError('');
-  }
   function chooseColumn(columnIndex: number, field: string) {
     const position = '@col:' + columnIndex;
     setColumns(current => {
@@ -117,17 +102,17 @@ export default function ImportContent({ view }: { view: string }) {
       const bytes = Array.from(new Uint8Array(await selected.arrayBuffer()));
       const info = await desktopApi.inspectImportFile(selected.name, bytes);
       setFile({ name: selected.name, bytes }); setWorkbook(info);
-      setSheet(info.sheets[0]?.name ?? ''); setHeaderRow(info.sheets[0]?.firstRows[0]?.row ?? 1);
+      setSheet(info.sheets[0]?.name ?? '');
       const first = info.sheets[0];
-      const titleRow = first?.firstRows[0];
+      const titleRow = pickHeaderRow(first?.firstRows ?? []);
       setColumns(suggestColumns(titleRow?.values ?? [], kind)); setFixedValues({});
       setNotice('Đã đọc tệp. Kiểm tra trường chọn ngay trên mỗi cột Excel.');
     } catch (reason: unknown) { setError(normalizeIpcError(reason).message); }
     finally { setBusy(false); }
   }
   function sourceError(): string {
-    if (!nppId) return 'Hãy chọn nhà phân phối ở bước 1.';
-    if (!from || !to || from > to) return 'Hãy chọn kỳ từ ngày / đến hết ngày hợp lệ ở bước 1.';
+    if (!nppId) return 'Chọn nhà phân phối ở phần thông tin tệp.';
+    if (!from || !to || from > to) return 'Nhập từ ngày và đến ngày hợp lệ ở phần thông tin tệp.';
     if (invalidFileType) return 'Tệp này giống bảng giá, không phải Sales In/Out. Hãy chọn đúng tệp doanh số.';
     if (missing.length) return 'Cần chọn cột hoặc khai báo giá trị chung cho: ' + missing.join(', ');
     if (invalidFixed.length) return 'Giá trị chung chưa hợp lệ: ' + invalidFixed.join(', ');
@@ -150,7 +135,7 @@ export default function ImportContent({ view }: { view: string }) {
   async function saveColumnProfile() {
     const problem = sourceError();
     if (problem) { setError(problem); return; }
-    if (headers.length === 0) { setError('Cần chọn dòng tiêu đề Excel.'); return; }
+    if (headers.length === 0) { setError('Excel không có dòng tên cột hợp lệ.'); return; }
     setBusy(true); setError('');
     try {
       await desktopApi.saveImportMappingProfile({ kind, distributorId: nppId, headers,
@@ -186,11 +171,10 @@ export default function ImportContent({ view }: { view: string }) {
       <p>Chọn tệp, xác định cột, xem trước kết quả rồi mới xác nhận lưu. Tệp chỉ được xử lý trên máy này.</p></div>
     {error ? <p role="alert" className="master-error">{error}</p> : null}
     {notice ? <p role="status" className="master-success">{notice}</p> : null}
-    {view === 'Lần nhập dữ liệu' ? <>
+    {view === 'Nhập Excel' ? <>
       <section className="content-panel import-panel" aria-label="Chọn tệp dữ liệu">
-        <h3>1. Chọn tệp và phạm vi dữ liệu</h3>
+        <h3>1. Chọn loại dữ liệu, NPP, kỳ và tệp</h3>
         <div className="import-fields">
-          <label>Tệp Excel hoặc CSV<input type="file" accept=".xlsx,.csv" onChange={(e) => { void onFileChange(e); }} disabled={busy} /></label>
           <label>Loại dữ liệu<select value={kind} onChange={(e) => {
             const value = e.target.value as ImportKind; setKind(value); setRowKind(value === 'SALES_IN' ? 'INVOICE' : 'DELIVERED');
             setColumns(suggestColumns(headers, value)); setFixedValues({}); setPreview(null);
@@ -199,40 +183,37 @@ export default function ImportContent({ view }: { view: string }) {
             <option key={npp.id} value={npp.id}>{npp.code} · {npp.name}</option>)}</select></label>
           <label>Kỳ từ ngày<input type="date" required value={from} onChange={(e) => { setFrom(e.target.value); setPreview(null); }} /></label>
           <label>Đến hết ngày<input type="date" required min={from || undefined} value={to} onChange={(e) => { setTo(e.target.value); setPreview(null); }} /></label>
+          <label>Tệp Excel hoặc CSV<input type="file" accept=".xlsx,.csv" onChange={(e) => { void onFileChange(e); }} disabled={busy} /></label>
         </div>
         {!workbook ? <p>Chưa chọn tệp. Hỗ trợ Excel .xlsx và CSV UTF-8, tối đa 6 MB.</p> :
-          <p><strong>{file?.name}</strong> · {workbook.sheets.length} trang tính · Chọn trang tính ở màn hình “Chọn cột Excel”.</p>}
+          <p><strong>{file?.name}</strong> · {workbook.sheets.length} trang tính · Chọn dữ liệu cho từng cột ngay bên dưới.</p>}
         {npps.length === 0 ? <p>Chưa có NPP đang sử dụng. Hãy tạo NPP ở mục Nhà phân phối trước.</p> : null}
       </section>
-      <section className="content-panel import-panel">
-        <h3>Lịch sử nhập dữ liệu chính thức</h3>
-        <div className="import-scroll"><table><thead><tr><th>Tệp</th><th>NPP</th><th>Loại</th><th>Kỳ</th><th>Dòng đã lưu</th><th>Trạng thái</th></tr></thead><tbody>
-          {history.map(h => <tr key={h.id}><td>{h.sourceFileName}</td><td>{h.distributorName}</td>
-            <td>{kindName[h.kind]}</td><td>{h.periodFrom} → {h.periodTo}</td><td>{h.validRows}</td><td>{h.active ? 'Đang dùng' : labelForStatus(h.status)}</td></tr>)}
-          {!history.length ? <tr><td colSpan={6}>Chưa có lần nhập dữ liệu nào được xác nhận.</td></tr> : null}
-        </tbody></table></div>
-      </section>
+
     </> : null}
-    {view === 'Chọn cột Excel' ? <section className="content-panel import-panel">
-      <h3>2. Chọn trang tính và cột dữ liệu</h3>
-      {!workbook ? <p>Chưa chọn tệp. Hãy chọn tệp ở màn hình “Lần nhập dữ liệu” trước.</p> : <>
-        <div className="import-fields">
-          <label>Trang tính<select value={sheet} onChange={(e) => {
-            const nextSheet = workbook.sheets.find(s => s.name === e.target.value);
-            setSheet(e.target.value); setHeaderRow(nextSheet?.firstRows[0]?.row ?? 1);
-            setColumns(suggestColumns(nextSheet?.firstRows[0]?.values ?? [], kind)); setFixedValues({}); setPreview(null);
-          }}>
-            {workbook.sheets.map(s => <option key={s.name} value={s.name}>{s.name} ({s.rows} dòng)</option>)}</select></label>
-          <label>Dòng tiêu đề<select value={headerRow} onChange={(e) => {
-            const row = Number(e.target.value); setHeaderRow(row);
-            setColumns(suggestColumns(active?.firstRows.find(x => x.row === row)?.values ?? [], kind)); setFixedValues({}); setPreview(null);
-          }}>
-            {active?.firstRows.map(x => <option key={x.row} value={x.row}>Dòng {x.row}: {x.values.slice(0,3).join(' | ')}</option>)}</select></label>
-          <label>Loại chứng từ của tệp<select value={rowKind} onChange={(e) => setRowKind(e.target.value as typeof rowKind)}>
-            {kind === 'SALES_OUT' ? <option value="DELIVERED">Đã giao hàng</option> : <option value="INVOICE">Đã bán vào NPP</option>}
-            <option value="RETURN">Hàng trả lại</option></select></label>
+    {view === 'Nhập Excel' ? <section className="content-panel import-panel">
+      <h3>2. Chọn dữ liệu ngay trên từng cột Excel</h3>
+      {!workbook ? <p>Chọn tệp Excel/CSV ở phần trên để thấy bảng và gán cột.</p> : <>
+        <div className="import-sheet-controls">
+          {workbook.sheets.length > 1 ? <label>Trang tính
+            <select value={sheet} onChange={(e) => {
+              const nextSheet = workbook.sheets.find(item => item.name === e.target.value);
+              setSheet(e.target.value);
+              setColumns(suggestColumns(pickHeaderRow(nextSheet?.firstRows ?? [])?.values ?? [], kind));
+              setFixedValues({}); setPreview(null); setError('');
+            }}>
+              {workbook.sheets.map(item => <option key={item.name} value={item.name}>{item.name} ({item.rows} dòng)</option>)}
+            </select>
+          </label> : <p><strong>Trang tính:</strong> {sheet}</p>}
+          <label>Loại chứng từ của tệp
+            <select value={rowKind} onChange={(e) => { setRowKind(e.target.value as typeof rowKind); setPreview(null); }}>
+              {kind === 'SALES_OUT' ? <option value="DELIVERED">Bán / giao hàng</option> : <option value="INVOICE">Bán vào NPP</option>}
+              <option value="RETURN">Hàng trả lại</option>
+            </select>
+          </label>
+          <span className="import-sheet-info">Tên cột Excel tự lấy từ hàng đầu tiên; không cần chọn dòng tiêu đề.</span>
         </div>
-        <p>Trường nào có trong Excel thì chọn ngay trên đầu cột. Nếu một thông tin giống nhau ở mọi dòng, chọn “Giá trị chung cho tệp” bên dưới. Không cần thêm cột giả vào Excel.</p>
+        <p><strong>Mỗi cột chọn đúng một lần</strong> bằng dropdown ngay trên bảng. Cột không cần dùng cứ để “Không sử dụng”.</p>
         {invalidFileType ? <p role="alert" className="import-field-warning">Tệp có dấu hiệu là bảng giá, không phải doanh số. Không được nhập nhầm thành Sales Out.</p> : null}
         {missing.length ? <p role="status" className="import-field-warning"><strong>Cần chọn cột hoặc giá trị chung:</strong> {missing.join(' · ')}</p> :
           <p role="status" className="import-field-ready">Đã khai báo đủ các trường bắt buộc.</p>}
@@ -260,41 +241,42 @@ export default function ImportContent({ view }: { view: string }) {
           </tbody></table>
         </div>
         <p>Cuộn ngang để xem toàn bộ {headers.length} cột nguồn; tên cột gốc và dữ liệu mẫu nằm ngay dưới dropdown.</p>
-        <section className="import-fixed-settings" aria-label="Nguồn dữ liệu cho từng trường">
-          <h4>Trường dữ liệu: cột Excel hoặc giá trị chung</h4>
-          <p>Giá trị chung chỉ áp dụng khi toàn bộ các dòng của tệp thực sự có cùng thông tin. Mã dòng nguồn là mã kỹ thuật để truy vết, không phải số hóa đơn.</p>
+        {(unmappedRequired.length > 0 || unmappedOptional.length > 0) ? <section className="import-fixed-settings" aria-label="Thông tin chung áp dụng một lần">
+          <h4>3. Thông tin chung cho cả tệp</h4>
+          <p>Chỉ nhập ở đây khi toàn bộ sản phẩm trong tệp có cùng giá trị. Trường đã chọn từ Excel không hiện lần nữa.</p>
           <div className="import-fixed-grid">
-            {fieldsFor(kind).map(field => {
-              const col = columns[field.key] ?? '';
-              const fixed = fixedValues[field.key];
-              const mode = col || (fixed === SOURCE_ROW_DOCUMENT ? '@generated' : fixed !== undefined ? '@fixed' : '');
+            {unmappedRequired.map(field => {
+              const value = fixedValues[field.key] ?? '';
+              const generated = field.key === 'document' && value === SOURCE_ROW_DOCUMENT;
               return <div key={field.key} className="import-fixed-field">
-                <label htmlFor={'source-value-' + field.key}>{field.name}{field.required ? ' *' : ''}</label>
-                <select id={'source-value-' + field.key} value={mode}
-                  onChange={e => chooseSource(field.key, e.target.value)}>
-                  <option value="">Không sử dụng / Chưa chọn</option>
-                  {headers.map((h, i) => {
-                    const position = '@col:' + i;
-                    return <option key={i} value={position}
-                      disabled={Object.entries(columns).some(([key, source]) => key !== field.key && source === position)}>
-                      {'Cột ' + (i+1) + ' · ' + (h || '(trống)')}</option>;
-                  })}
-                  {field.key !== 'type' ? <option value="@fixed">Giá trị chung cho cả tệp</option> : null}
-                  {field.key === 'document' ? <option value="@generated">Tạo mã riêng theo dòng nguồn</option> : null}
-                </select>
-                {mode === '@fixed' ? <input
-                  aria-label={'Giá trị chung: ' + field.name}
-                  type={field.key === 'date' ? 'date' : 'text'}
-                  inputMode={field.key === 'quantity' || field.key === 'amount' ? 'decimal' : 'text'}
-                  placeholder={field.key === 'quantity' ? 'Ví dụ: 1' : field.key === 'amount' ? 'VND nguyên, không dấu phân cách' : 'Nhập giá trị áp dụng cho mọi dòng'}
-                  value={fixed ?? ''}
-                  onChange={e => { setFixedValues(old => ({ ...old, [field.key]: e.target.value })); setPreview(null); setError(''); }}
-                /> : null}
-                {mode === '@generated' ? <small>Mỗi dòng Excel có mã nguồn riêng; không coi là số chứng từ NPP.</small> : null}
+                <label htmlFor={'fixed-' + field.key}>{field.name} *</label>
+                {generated ? <div className="import-fixed-generated">Dùng mã riêng theo từng dòng nguồn</div> :
+                  <input id={'fixed-' + field.key} type={field.key === 'date' ? 'date' : 'text'}
+                    inputMode={field.key === 'amount' || field.key === 'quantity' ? 'decimal' : 'text'}
+                    value={value} onChange={e => {setFixedValues(old => ({...old,[field.key]:e.target.value}));setPreview(null);setError('');}}
+                    placeholder={field.key === 'unit' ? 'Ví dụ: THUNG' : field.key === 'document' ? 'Nhập số chứng từ chung' :
+                      field.key === 'quantity' ? 'Ví dụ: 1' : field.key === 'amount' ? 'Giá trị VND' : 'Nhập giá trị chung'} />}
+                {field.key === 'document' ? <label className="import-inline-checkbox">
+                  <input type="checkbox" checked={generated} onChange={e => {
+                    setFixedValues(old => ({...old,document:e.target.checked ? SOURCE_ROW_DOCUMENT : ''}));
+                    setPreview(null);setError('');
+                  }}/> Không có số chứng từ — tạo mã dòng nguồn để truy vết
+                </label> : null}
               </div>;
             })}
           </div>
-        </section>
+          {unmappedOptional.length > 0 ? <details className="import-optional-common">
+            <summary>Thêm thông tin chung khác (nếu có)</summary>
+            <div className="import-fixed-grid">
+              {unmappedOptional.map(field => <div key={field.key} className="import-fixed-field">
+                <label htmlFor={'fixed-' + field.key}>{field.name}</label>
+                <input id={'fixed-' + field.key} value={fixedValues[field.key] ?? ''}
+                  onChange={e => {setFixedValues(old => ({...old,[field.key]:e.target.value}));setPreview(null);setError('');}}
+                  placeholder="Không bắt buộc" />
+              </div>)}
+            </div>
+          </details> : null}
+        </section> : null}
         {columns.type ? <div className="import-fields">
           <label>Giá trị chỉ hàng bán/giao<input value={positive} onChange={(e) => setPositive(e.target.value)} placeholder={kind === 'SALES_IN' ? 'INVOICE' : 'DELIVERED'} /></label>
           <label>Giá trị chỉ hàng trả<input value={returned} onChange={(e) => setReturned(e.target.value)} placeholder="RETURN" /></label>
@@ -310,9 +292,9 @@ export default function ImportContent({ view }: { view: string }) {
         <p>Mẫu đã lưu sẽ tự được đề xuất khi nhập lại tệp cùng NPP, loại dữ liệu và cấu trúc cột, kể cả sau khi mở lại ứng dụng.</p>
       </>}
     </section> : null}
-    {view === 'Dòng cần kiểm tra' ? <section className="content-panel import-panel">
-      <h3>3. Kiểm tra và xác nhận nhập</h3>
-      {!previewReady ? <p>Chưa có kết quả xem trước, hoặc thông tin đã thay đổi. Vào “Chọn cột Excel” và bấm “Xem trước”.</p> : <>
+    {view === 'Nhập Excel' && previewReady && preview ? <section className="content-panel import-panel">
+      <h3>4. Kiểm tra và xác nhận nhập</h3>
+      <>
         <div className="import-stats"><span>Tổng dòng: <strong>{preview.totalRows}</strong></span><span>Hợp lệ: <strong>{preview.validRows}</strong></span>
           <span>Bỏ qua: <strong>{preview.skippedRows}</strong></span><span>Cần sửa: <strong>{preview.errorRows}</strong></span><span>Chưa xác định nhân viên: <strong>{preview.unknownEmployees}</strong></span></div>
         {preview.issues.length>0 ? <div className="import-scroll"><table><thead><tr><th>Dòng</th><th>Cột</th><th>Mức độ</th><th>Lý do / cách xử lý</th></tr></thead><tbody>
@@ -327,7 +309,15 @@ export default function ImportContent({ view }: { view: string }) {
         <Button appearance="primary" disabled={busy || hasErrors || preview.sameFileAlreadyActive || preview.validRows===0 || (preview.hasPrevious&&!replaceOld)}
           onClick={() => {void doCommit();}}>{busy?'Đang lưu…':'Xác nhận nhập dữ liệu chính thức'}</Button>
         <p>Chỉ bấm xác nhận khi mã hàng NPP, đơn vị quy đổi và số liệu đã được kiểm tra. Nhân viên chưa xác định được giữ riêng, không tự phân bổ.</p>
-      </>}
+      </>
     </section> : null}
+    {view === 'Lịch sử nhập' ? <section className="content-panel import-panel">
+        <h3>Lịch sử nhập dữ liệu chính thức</h3>
+        <div className="import-scroll"><table><thead><tr><th>Tệp</th><th>NPP</th><th>Loại</th><th>Kỳ</th><th>Dòng đã lưu</th><th>Trạng thái</th></tr></thead><tbody>
+          {history.map(h => <tr key={h.id}><td>{h.sourceFileName}</td><td>{h.distributorName}</td>
+            <td>{kindName[h.kind]}</td><td>{h.periodFrom} → {h.periodTo}</td><td>{h.validRows}</td><td>{h.active ? 'Đang dùng' : labelForStatus(h.status)}</td></tr>)}
+          {!history.length ? <tr><td colSpan={6}>Chưa có lần nhập dữ liệu nào được xác nhận.</td></tr> : null}
+        </tbody></table></div>
+      </section> : null}
   </div>;
 }
