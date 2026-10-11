@@ -374,7 +374,7 @@ mod tests {
                 assert_eq!(
                     c.query_row("SELECT count(*) FROM schema_migrations", [], |r| r
                         .get::<_, i64>(0))?,
-                    4
+                    5
                 );
                 assert!(c.execute(
                     "INSERT INTO local_operator(id,display_name,role,created_at_utc) VALUES(2,'bad','SALES','2026')",[]

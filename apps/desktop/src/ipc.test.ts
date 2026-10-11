@@ -17,8 +17,23 @@ describe('allowlisted typed desktop IPC', () => {
       ['create_operator', { request: input }],
     ]);
     expect(Object.keys(desktopApi)).toEqual(['health', 'getOperator', 'createOperator', 'updateOperator',
+      'listCatalog', 'createCatalogOption', 'assignFamilyCatalog', 'createPriceList', 'createPriceItem', 'closePriceItem', 'resolveCatalogSku',
       'listMasterData', 'createMasterItem', 'renameMasterItem', 'setMasterActive', 'createMasterLink', 'endMasterLink',
       'inspectImportFile', 'previewImport', 'commitImport', 'listImportHistory', 'getImportMappingProfile', 'saveImportMappingProfile']);
+  });
+
+  it('uses typed NPP pricing calls and requires explicit lookup context', async () => {
+    const request = { distributorId: 'n1', rawSkuCode: '0007', rawUnit: 'THUNG',
+      businessDate: '2026-10-01', priceType: 'OUT' };
+    invokeMock.mockResolvedValueOnce({ skuStatus: 'FOUND', priceStatus: 'NOT_FOUND',
+      product: { skuCode: '0007' }, referencePrice: null });
+    await desktopApi.resolveCatalogSku(request);
+    expect(invokeMock).toHaveBeenCalledWith('resolve_catalog_sku', { request });
+    const list = { distributorId: 'n1', code: 'P1', name: 'Bảng giá',
+      priceType: 'OUT', effectiveFrom: '2026-01-01' };
+    invokeMock.mockResolvedValueOnce({ id: 'p1' });
+    await desktopApi.createPriceList(list);
+    expect(invokeMock).toHaveBeenCalledWith('create_price_list', { request: list });
   });
 
   it('normalizes structured Rust errors without exposing internals', async () => {

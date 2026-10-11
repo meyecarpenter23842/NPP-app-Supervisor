@@ -185,7 +185,11 @@ fn calendar_date(value: &str) -> bool {
     if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
         return false;
     }
-    if !b.iter().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit()) {
+    if !b
+        .iter()
+        .enumerate()
+        .all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
+    {
         return false;
     }
     let year: i32 = value[0..4].parse().unwrap_or(0);
@@ -195,7 +199,20 @@ fn calendar_date(value: &str) -> bool {
         return false;
     }
     let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
-    let days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let days = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     (1..=days[month - 1]).contains(&day)
 }
 fn period(start: &str, end: Option<&str>) -> Result<()> {
@@ -239,7 +256,10 @@ fn catalog_option(row: &Row<'_>) -> rusqlite::Result<CatalogOption> {
 
 #[tauri::command]
 pub fn list_catalog(db: State<'_, AppDatabase>) -> Result<CatalogSnapshot> {
-    let conn = db.connection.lock().map_err(|_| CatalogError::unavailable())?;
+    let conn = db
+        .connection
+        .lock()
+        .map_err(|_| CatalogError::unavailable())?;
     let categories = read_rows(
         &conn,
         "SELECT id,code,name,active FROM catalog_categories ORDER BY name",
@@ -314,8 +334,13 @@ pub fn create_catalog_option(
     let table = option_table(&request.kind)?;
     let code = clean(&request.code, 96)?.to_ascii_uppercase();
     let name = clean(&request.name, 256)?;
-    let conn = db.connection.lock().map_err(|_| CatalogError::unavailable())?;
-    let tx = conn.unchecked_transaction().map_err(CatalogError::storage)?;
+    let conn = db
+        .connection
+        .lock()
+        .map_err(|_| CatalogError::unavailable())?;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(CatalogError::storage)?;
     let id = new_id(&tx)?;
     let sql = format!("INSERT INTO {table}(id,code,name) VALUES(?1,?2,?3)");
     tx.execute(&sql, params![id, code, name])
@@ -330,8 +355,13 @@ pub fn assign_family_catalog(
     request: AssignFamilyCatalog,
 ) -> Result<CatalogMutation> {
     let family = clean(&request.family_id, 128)?;
-    let conn = db.connection.lock().map_err(|_| CatalogError::unavailable())?;
-    let tx = conn.unchecked_transaction().map_err(CatalogError::storage)?;
+    let conn = db
+        .connection
+        .lock()
+        .map_err(|_| CatalogError::unavailable())?;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(CatalogError::storage)?;
     let changed = tx
         .execute(
             "UPDATE product_families SET category_id=?1,brand_id=?2,
@@ -357,8 +387,13 @@ pub fn create_price_list(
     let name = clean(&request.name, 256)?;
     let price_type = clean(&request.price_type, 64)?.to_ascii_uppercase();
     period(&request.effective_from, request.effective_to.as_deref())?;
-    let conn = db.connection.lock().map_err(|_| CatalogError::unavailable())?;
-    let tx = conn.unchecked_transaction().map_err(CatalogError::storage)?;
+    let conn = db
+        .connection
+        .lock()
+        .map_err(|_| CatalogError::unavailable())?;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(CatalogError::storage)?;
     let id = new_id(&tx)?;
     tx.execute(
         "INSERT INTO price_lists(id,distributor_id,code,name,price_type,effective_from,effective_to)
@@ -395,8 +430,13 @@ pub fn create_price_item(
         return Err(CatalogError::invalid());
     }
     period(&request.effective_from, request.effective_to.as_deref())?;
-    let conn = db.connection.lock().map_err(|_| CatalogError::unavailable())?;
-    let tx = conn.unchecked_transaction().map_err(CatalogError::storage)?;
+    let conn = db
+        .connection
+        .lock()
+        .map_err(|_| CatalogError::unavailable())?;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(CatalogError::storage)?;
     let scope: Option<(String, Option<String>)> = tx
         .query_row(
             "SELECT effective_from,effective_to FROM price_lists
@@ -408,9 +448,12 @@ pub fn create_price_item(
         .map_err(CatalogError::storage)?;
     let (from, to) = scope.ok_or_else(CatalogError::missing)?;
     if request.effective_from < from
-        || to
-            .as_deref()
-            .is_some_and(|until| request.effective_to.as_deref().is_none_or(|end| end > until))
+        || to.as_deref().is_some_and(|until| {
+            request
+                .effective_to
+                .as_deref()
+                .is_none_or(|end| end > until)
+        })
     {
         return Err(CatalogError::invalid());
     }
@@ -444,8 +487,13 @@ pub fn close_price_item(
     if !calendar_date(&request.effective_to) {
         return Err(CatalogError::invalid());
     }
-    let conn = db.connection.lock().map_err(|_| CatalogError::unavailable())?;
-    let tx = conn.unchecked_transaction().map_err(CatalogError::storage)?;
+    let conn = db
+        .connection
+        .lock()
+        .map_err(|_| CatalogError::unavailable())?;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(CatalogError::storage)?;
     let changed = tx
         .execute(
             "UPDATE price_list_items SET effective_to=?1
@@ -504,13 +552,20 @@ fn resolve(conn: &Connection, request: &ResolveCatalogRequest) -> Result<Catalog
         .map_err(CatalogError::storage)?;
     if matches.len() != 1 {
         return Ok(CatalogResolution {
-            sku_status: if matches.is_empty() { "NOT_FOUND" } else { "AMBIGUOUS" },
+            sku_status: if matches.is_empty() {
+                "NOT_FOUND"
+            } else {
+                "AMBIGUOUS"
+            },
             product: None,
             price_status: "NOT_REQUESTED",
             reference_price: None,
         });
     }
-    let product = matches.into_iter().next().ok_or_else(CatalogError::missing)?;
+    let product = matches
+        .into_iter()
+        .next()
+        .ok_or_else(CatalogError::missing)?;
     let Some(price_type) = price_type else {
         return Ok(CatalogResolution {
             sku_status: "FOUND",
@@ -561,16 +616,19 @@ pub fn resolve_catalog_sku(
     db: State<'_, AppDatabase>,
     request: ResolveCatalogRequest,
 ) -> Result<CatalogResolution> {
-    let conn = db.connection.lock().map_err(|_| CatalogError::unavailable())?;
+    let conn = db
+        .connection
+        .lock()
+        .map_err(|_| CatalogError::unavailable())?;
     resolve(&conn, &request)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    use tempfile::{tempdir, TempDir};
 
-    fn fixture() -> AppDatabase {
+    fn fixture() -> (TempDir, AppDatabase) {
         let dir = tempdir().unwrap();
         let db = AppDatabase::open(dir.path()).unwrap();
         let conn = db.connection.lock().unwrap();
@@ -597,9 +655,7 @@ mod tests {
         )
         .unwrap();
         drop(conn);
-        // Keep the app-data tempdir alive for the lifetime of this SQLite connection.
-        // The test performs all assertions before db is dropped; SQLite holds an open handle.
-        db
+        (dir, db)
     }
 
     fn query(npp: &str, unit: &str, date: &str, price_type: Option<&str>) -> ResolveCatalogRequest {
@@ -614,7 +670,7 @@ mod tests {
 
     #[test]
     fn npp_date_unit_scope_and_absent_prices() {
-        let db = fixture();
+        let (_dir, db) = fixture();
         let conn = db.connection.lock().unwrap();
         let june = resolve(&conn, &query("n1", "THUNG", "2026-06-30", Some("OUT"))).unwrap();
         assert_eq!(june.product.as_ref().unwrap().sku_code, "0001");
@@ -634,7 +690,7 @@ mod tests {
 
     #[test]
     fn overlap_and_ambiguous_price_do_not_pick_arbitrary_results() {
-        let db = fixture();
+        let (_dir, db) = fixture();
         let conn = db.connection.lock().unwrap();
         assert!(conn.execute(
             "INSERT INTO price_list_items(id,price_list_id,product_id,unit_code,amount_vnd,effective_from)
