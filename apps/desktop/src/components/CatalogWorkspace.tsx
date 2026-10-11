@@ -312,7 +312,11 @@ export default function CatalogWorkspace({ view }: { view: string }) {
       setAmount('');
     }, 'Đã lưu giá tham khảo.');
   }
-  if (loading) return <p role="status">Đang đọc danh mục trên máy…</p>;
+  if (loading) return <section className="content-panel catalog-panel" role="status">
+    <h2>Đang đọc sản phẩm và SKU</h2>
+    <p>Ứng dụng đang tải danh mục sản phẩm chuẩn, nhóm hàng, nhãn hàng, đơn vị quy đổi, mã theo nhà phân phối và giá tham khảo đã được lưu trên máy.</p>
+    <p>Nếu chưa có dữ liệu, anh có thể thêm thủ công theo từng bước hoặc nhập Excel sau khi dữ liệu hiện ra. Chưa có thông tin nào được ghi hoặc thay đổi.</p>
+  </section>;
   const priceForms = <section className="content-panel catalog-panel">
       <h2>5. Bảng giá theo NPP</h2>
       <form onSubmit={addPriceList} className="catalog-form-grid">
