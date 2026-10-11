@@ -640,7 +640,7 @@ mod tests {
              INSERT INTO products(id,sku_code,name,base_unit,product_family_id)
               VALUES('p','0001','Nước 330 ml','LON','f');
              INSERT INTO sku_unit_conversions(id,product_id,unit_code,conversion_num,conversion_den)
-              VALUES('thung','p','THUNG',24,1);
+              VALUES('base-unit','p','LON',1,1),('thung','p','THUNG',24,1);
              INSERT INTO sku_aliases
               (id,distributor_id,raw_sku_code,product_id,raw_unit,conversion_num,conversion_den)
               VALUES('a1','n1','0007','p','THUNG',24,1),

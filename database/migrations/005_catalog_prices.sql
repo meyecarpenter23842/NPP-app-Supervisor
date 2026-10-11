@@ -21,7 +21,11 @@ CREATE TABLE catalog_units (
 -- Backfill legacy text without overwriting it. Null remains genuinely unknown.
 INSERT INTO catalog_categories(id,code,name)
 SELECT 'legacy-category:'||upper(trim(category)),upper(trim(category)),min(trim(category))
-FROM product_families WHERE category IS NOT NULL AND trim(category)<>''
+FROM (
+  SELECT category FROM product_families
+  UNION ALL SELECT category FROM products
+)
+WHERE category IS NOT NULL AND trim(category)<>''
 GROUP BY upper(trim(category));
 INSERT INTO catalog_brands(id,code,name)
 SELECT 'legacy-brand:'||upper(trim(brand)),upper(trim(brand)),min(trim(brand))
