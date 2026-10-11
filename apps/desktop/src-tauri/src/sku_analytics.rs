@@ -44,17 +44,22 @@ fn read(conn: &Connection) -> Result<Vec<SkuMetric>, SkuMetricsError> {
          GROUP BY distributor_id,product_id,source_kind
          ORDER BY distributor_id,source_kind,product_id",
     ).map_err(|_| storage())?;
-    let rows = stmt.query_map([], |r| Ok(SkuMetric {
-        distributor_id: r.get(0)?,
-        product_id: r.get(1)?,
-        source_kind: r.get(2)?,
-        quantity_micro: r.get(3)?,
-        net_amount_vnd: r.get(4)?,
-        first_date: r.get(5)?,
-        last_date: r.get(6)?,
-        transaction_rows: r.get(7)?,
-    })).map_err(|_| storage())?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(|_| storage())
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(SkuMetric {
+                distributor_id: r.get(0)?,
+                product_id: r.get(1)?,
+                source_kind: r.get(2)?,
+                quantity_micro: r.get(3)?,
+                net_amount_vnd: r.get(4)?,
+                first_date: r.get(5)?,
+                last_date: r.get(6)?,
+                transaction_rows: r.get(7)?,
+            })
+        })
+        .map_err(|_| storage())?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|_| storage())
 }
 
 #[tauri::command]
