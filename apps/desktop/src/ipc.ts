@@ -118,6 +118,12 @@ export type CatalogResolution = {
   referencePrice: null | { priceListId: string; amountVnd: number; unitCode: string };
 };
 
+export type SkuMetric = {
+  distributorId: string; productId: string; sourceKind: 'SALES_IN' | 'SALES_OUT';
+  quantityMicro: number; netAmountVnd: number; firstDate: string; lastDate: string;
+  transactionRows: number;
+};
+
 export type CatalogImportKind = 'CATEGORY' | 'BRAND' | 'UNIT_CATALOG' | 'FAMILY' | 'SKU' | 'CONVERSION' | 'ALIAS' | 'PRICE';
 export type CatalogImportRequest = {
   fileName: string; bytes: number[]; sheetName: string; headerRow: number;
@@ -196,6 +202,7 @@ export const desktopApi = {
   updateOperator: (request: OperatorInput) =>
     call<LocalOperator>('update_operator', { request }),
   listCatalog: () => call<CatalogSnapshot>('list_catalog'),
+  listSkuMetrics: () => call<SkuMetric[]>('list_sku_metrics'),
   createProductFamily: (request: NewProductFamily) =>
     call<CatalogMutation>('create_product_family', { request }),
   createCatalogOption: (request: NewCatalogOption) =>
@@ -234,7 +241,7 @@ export const desktopApi = {
     call<void>('save_import_mapping_profile', { request }),
 };
 
-type Command = 'create_product_family' | 'preview_catalog_import' | 'commit_catalog_import' | 'list_catalog_import_history' | 'list_catalog' | 'create_catalog_option' | 'assign_family_catalog'
+type Command = 'list_sku_metrics' | 'create_product_family' | 'preview_catalog_import' | 'commit_catalog_import' | 'list_catalog_import_history' | 'list_catalog' | 'create_catalog_option' | 'assign_family_catalog'
   | 'create_price_list' | 'create_price_item' | 'close_price_item' | 'resolve_catalog_sku'
   | 'health' | 'get_operator' | 'create_operator' | 'update_operator'
   | 'list_master_data' | 'create_master_item' | 'rename_master_item'
