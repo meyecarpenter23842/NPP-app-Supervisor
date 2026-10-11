@@ -467,11 +467,8 @@ mod tests {
             |r| r.get(0),
         )?;
         assert_eq!(source_category_count, 1);
-        let version_count: i64 = c.query_row(
-            "SELECT count(*) FROM schema_migrations",
-            [],
-            |r| r.get(0),
-        )?;
+        let version_count: i64 =
+            c.query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))?;
         assert_eq!(version_count, 5);
         ensure_foreign_keys(&c)?;
         assert!(d.path().join("backups").read_dir()?.next().is_some());
