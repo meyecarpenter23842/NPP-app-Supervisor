@@ -216,9 +216,7 @@ fn worksheet(name: &str, xml: &[u8], strings: &[String]) -> Result<Sheet, String
                 cell.clear();
                 formula = false;
             }
-            Event::Start(e)
-                if e.local_name().as_ref() == "v" || e.local_name().as_ref() == "t" =>
-            {
+            Event::Start(e) if e.local_name().as_ref() == "v" || e.local_name().as_ref() == "t" => {
                 reading = true
             }
             Event::End(e) if e.local_name().as_ref() == "v" || e.local_name().as_ref() == "t" => {
