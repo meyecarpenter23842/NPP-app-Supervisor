@@ -978,15 +978,22 @@ pub fn preview_import(
 // Viewing source rows is always possible for a structurally valid workbook, even when
 // a sales import has not yet been configured. Only the commit path writes to SQLite.
 fn preview_with_conn(db: &Connection, request: &ImportRequest) -> Result<Preview, ImportError> {
-    let sheets = import_parse::parse(&request.file_name, &request.bytes)
-        .map_err(|s| invalid(&s))?;
-    let sample = sheets.iter()
+    let sheets =
+        import_parse::parse(&request.file_name, &request.bytes).map_err(|s| invalid(&s))?;
+    let sample = sheets
+        .iter()
         .find(|s| s.name == request.sheet_name)
-        .map(|s| s.rows.iter()
-            .filter(|(row, _)| *row > request.header_row)
-            .take(12)
-            .map(|(row, values)| RowView { row: *row, values: values.clone() })
-            .collect::<Vec<_>>())
+        .map(|s| {
+            s.rows
+                .iter()
+                .filter(|(row, _)| *row > request.header_row)
+                .take(12)
+                .map(|(row, values)| RowView {
+                    row: *row,
+                    values: values.clone(),
+                })
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
     match checked(db, request) {
         Ok(c) => {
@@ -1010,10 +1017,18 @@ fn preview_with_conn(db: &Connection, request: &ImportRequest) -> Result<Preview
         }
         Err(err) if err.code == "IMPORT_INVALID" => Ok(Preview {
             sha256: digest(&request.bytes),
-            total_rows: sheets.iter().find(|s| s.name == request.sheet_name)
-                .map(|s| s.rows.iter().filter(|(row, cells)|
-                    *row > request.header_row && cells.iter().any(|c| !c.trim().is_empty())
-                ).count()).unwrap_or(0),
+            total_rows: sheets
+                .iter()
+                .find(|s| s.name == request.sheet_name)
+                .map(|s| {
+                    s.rows
+                        .iter()
+                        .filter(|(row, cells)| {
+                            *row > request.header_row && cells.iter().any(|c| !c.trim().is_empty())
+                        })
+                        .count()
+                })
+                .unwrap_or(0),
             valid_rows: 0,
             skipped_rows: 0,
             unknown_employees: 0,
