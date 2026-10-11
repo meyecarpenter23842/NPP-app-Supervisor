@@ -7,6 +7,7 @@ const visibleCopyFiles = [
   './components/pageModel.ts',
   './components/BusinessContent.tsx',
   './components/MasterDataContent.tsx',
+  './components/CatalogWorkspace.tsx',
   './components/Workspace.tsx',
   './App.tsx',
   './ipc.ts',
@@ -21,6 +22,10 @@ describe('Business language for Sales, SUP and ASM (Issue #21)', () => {
     expect(businessPages.find((p) => p.id === 'sales-out')?.views).toContain('Chưa xác định nhân viên');
     expect(businessPages.find((p) => p.id === 'inventory')?.views).toContain('Kiểm tra chênh lệch');
     expect(businessPages.find((p) => p.id === 'team')?.views).toContain('Sơ đồ quản lý');
+    expect(businessPages.find((p) => p.id === 'sku')?.title).toBe('Sản phẩm & SKU');
+    expect(businessPages.find((p) => p.id === 'sku')?.views).toEqual([
+      'Thiết lập nhanh', 'Danh sách sản phẩm', 'Mã NPP & bảng giá', 'Nhập Excel', 'Phân tích SKU',
+    ]);
   });
 
   it('prevents common technical jargon in user-facing screen copy', () => {
