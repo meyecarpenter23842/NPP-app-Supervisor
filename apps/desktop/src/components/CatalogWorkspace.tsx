@@ -248,7 +248,7 @@ export default function CatalogWorkspace({ view }: { view: string }) {
     const [m, c, actual] = await Promise.all([desktopApi.listMasterData(), desktopApi.listCatalog(), view === 'Phân tích SKU' ? desktopApi.listSkuMetrics() : Promise.resolve([])]);
     setMaster(m); setCatalog(c); setMetrics(actual);
     setFamilyId(prev => m.families.some(f => f.id === prev) ? prev : (m.families[0]?.id ?? ''));
-    setSkuId(prev => m.skus.some(f => f.id === prev) ? prev : (m.skus[0]?.id ?? ''));
+    setSkuId(prev => m.skus.some(f => f.id === prev) ? prev : '');
     setEditName(prev => prev || m.families[0]?.name || '');
     setNppId(prev => m.distributors.some(f => f.id === prev) ? prev : (m.distributors[0]?.id ?? ''));
     setListId(prev => c.priceLists.some(p => p.id === prev) ? prev : (c.priceLists[0]?.id ?? ''));
