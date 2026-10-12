@@ -353,7 +353,9 @@ export default function CatalogWorkspace({ view }: { view: string }) {
       <form onSubmit={addPriceItem} className="catalog-form-grid">
         <label>Bảng giá<select required value={selectedList} onChange={e => setListId(e.target.value)}>
           <option value="">Chọn bảng giá</option>{activeLists.map(x => <option key={x.id} value={x.id}>{x.code} · {x.priceType}</option>)}</select></label>
-        <label>SKU chuẩn<select required value={skuId} onChange={e => { setSkuId(e.target.value); setPriceUnitCode(''); setAliasUnitCode(''); }}>
+        <label>SKU chuẩn<select required value={skuId} onChange={e => { const selected = master.skus.find(x => x.id === e.target.value);
+          setSkuId(e.target.value); if (selected?.parentId) setFamilyId(selected.parentId);
+          setPriceUnitCode(''); setAliasUnitCode(''); }}>
           <option value="">Chọn SKU</option>{(view === 'Mã NPP & bảng giá' ? master.skus : familySkus).map(x =>
             <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></label>
         <label>Đơn vị giá<select required value={priceUnit?.unitCode ?? ''} onChange={e => setPriceUnitCode(e.target.value)}>
