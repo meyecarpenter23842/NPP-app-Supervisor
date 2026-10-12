@@ -584,14 +584,14 @@ fn run(
                     preview.unchanged_rows += 1;
                 }
                 preview.sample.push(CatalogRowStatus {
-                        row: number,
-                        status: action,
-                        message: if action == "ADDED" {
-                            "Thêm mới".into()
-                        } else {
-                            "Đã có, không ghi trùng".into()
-                        },
-                    });
+                    row: number,
+                    status: action,
+                    message: if action == "ADDED" {
+                        "Thêm mới".into()
+                    } else {
+                        "Đã có, không ghi trùng".into()
+                    },
+                });
                 events.push((number, action, id));
             }
             Err(e) => {
