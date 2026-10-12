@@ -14,7 +14,7 @@ function suggestSalesColumns(headers: string[], kind: ImportKind) {
 }
 const labelForStatus = (code: string) => code === 'COMMITTED' ? 'Đang sử dụng' : code === 'SUPERSEDED' ? 'Đã thay bằng bản mới' : 'Chưa xác nhận';
 
-export default function ImportContent({ view }: { view: string }) {
+export default function ImportContent({ view, onGoToCatalog }: { view: string; onGoToCatalog?: () => void }) {
   const [npps, setNpps] = useState<MasterItem[]>([]);
   const [history, setHistory] = useState<ImportHistory[]>([]);
   const [file, setFile] = useState<{ name: string; bytes: number[] } | null>(null);
@@ -200,7 +200,7 @@ export default function ImportContent({ view }: { view: string }) {
           }}>
             <option value="SALES_OUT">NPP bán ra (Sales Out)</option>
             <option value="SALES_IN">Công ty bán vào NPP (Sales In)</option>
-            <option value="PRICE_SHEET">Bảng giá / Danh mục — chỉ xem</option>
+            <option value="PRICE_SHEET">Bảng giá / Danh mục — nhập tại Sản phẩm & SKU</option>
           </select></label>
           <label>Nhà phân phối<select value={nppId} required onChange={(e) => { setNppId(e.target.value); setPreview(null); }}><option value="">Chọn NPP</option>{npps.map(npp =>
             <option key={npp.id} value={npp.id}>{npp.code} · {npp.name}</option>)}</select></label>
@@ -335,7 +335,8 @@ export default function ImportContent({ view }: { view: string }) {
             <Button appearance="primary" disabled={busy || !file} onClick={() => { void doPreview(); }}>
               {busy ? 'Đang kiểm tra…' : 'Xem trước và kiểm tra'}</Button>
           </div>
-        </> : <p role="note" className="import-file-hint">Bảng giá và danh mục chỉ được xem trong phiên bản hiện tại. Không có thao tác lưu doanh số từ chế độ này.</p>}
+        </> : <p role="note" className="import-file-hint">Bảng giá và danh mục được nhập riêng tại Sản phẩm & SKU. Không lấy dữ liệu giá làm doanh số.</p>}
+        {fileMode === 'PRICE_SHEET' ? <Button appearance="primary" disabled={!onGoToCatalog} onClick={onGoToCatalog}>Mở nhập danh mục và bảng giá</Button> : null}
         {fileMode !== 'PRICE_SHEET' ? <p>Mẫu cột đã lưu được tự nạp cho cùng NPP và bố cục Excel.</p> : null}
       </>}
     </section> : null}

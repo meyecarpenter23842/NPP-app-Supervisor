@@ -324,3 +324,58 @@ button:disabled { cursor: not-allowed; }
 .import-validation-note p { color: #76532a; }
 .import-sheet-controls .import-mixed-option { display: flex; align-items: center; gap: 8px; min-width: 245px; max-width: 330px; font-size: 12px; }
 .import-mixed-option > input { flex: 0 0 auto; width: 17px; height: 17px; accent-color: var(--brand); }
+
+
+/* P2: dense, task-first product catalog workspace. Existing shell/tokens retained. */
+.catalog-workspace, .catalog-steps, .catalog-excel { display: grid; gap: 16px; min-width: 0; }
+.catalog-columns { display: grid; grid-template-columns: minmax(214px, 275px) minmax(0, 1fr); align-items: start; gap: 16px; }
+.catalog-columns > * { min-width: 0; }
+.catalog-panel { padding: 18px; min-width: 0; }
+.catalog-panel h2 { margin: 0 0 8px; font-size: 17px; line-height: 1.4; color: var(--text); }
+.catalog-panel h3 { margin: 18px 0 8px; font-size: 14px; }
+.catalog-panel p { color: var(--muted); margin: 6px 0 12px; line-height: 1.5; }
+.catalog-panel label { display: grid; gap: 5px; color: var(--text); font-size: 13px; font-weight: 600; min-width: 0; }
+.catalog-panel select, .catalog-panel input {
+  width: 100%; min-width: 0; height: 36px; padding: 5px 9px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-weight: 400;
+}
+.catalog-panel input[type="file"] { height: auto; }
+.catalog-panel :is(button, input, select):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.catalog-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 12px; align-items: end; margin: 12px 0; }
+.catalog-inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 12px 0; }
+.catalog-inline-form label { flex: 1 1 148px; }
+.catalog-panel button { min-height: 35px; padding: 7px 13px; background: var(--surface-soft); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-weight: 600; }
+.catalog-panel button:hover:not(:disabled) { background: var(--soft-brand); }
+.catalog-panel button.catalog-primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+.catalog-panel button.catalog-primary:hover:not(:disabled) { background: var(--brand-strong); }
+.catalog-panel button:disabled { opacity: .5; }
+.catalog-picker { position: sticky; top: 12px; }
+.catalog-family-list { display: grid; gap: 4px; max-height: min(56vh, 540px); overflow: auto; margin: 10px 0; }
+.catalog-family-list button { display: flex; align-items: start; flex-direction: column; text-align: left;
+  gap: 2px; width: 100%; overflow-wrap: anywhere; }
+.catalog-family-list button.selected { border-color: var(--brand); background: var(--soft-brand); }
+.catalog-family-list button span { font-size: 12px; color: var(--muted); font-weight: 400; }
+.catalog-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.catalog-chips > span { padding: 4px 7px; border-radius: 5px; background: var(--surface-soft); border: 1px solid var(--border); font-size: 12px; }
+.catalog-small { font-size: 12px; }
+.catalog-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.catalog-table :is(th, td) { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.catalog-table th { white-space: nowrap; color: var(--text); font-weight: 650; background: var(--surface-soft); }
+.catalog-table td { max-width: 320px; overflow-wrap: anywhere; }
+.catalog-table tbody tr:hover { background: var(--surface-soft); }
+.catalog-excel-scroll { max-width: 100%; overflow: auto; max-height: 440px; margin: 12px 0; border: 1px solid var(--border); border-radius: 7px; }
+.catalog-excel-scroll thead th { position: sticky; top: 0; z-index: 1; }
+.catalog-excel-scroll thead th small { display: block; max-width: 170px; overflow: hidden; text-overflow: ellipsis; padding-top: 7px; }
+.catalog-excel-scroll thead th select { min-width: 158px; }
+.catalog-stats { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; }
+.catalog-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.catalog-common { margin: 12px 0; }
+.catalog-common summary { cursor: pointer; color: var(--brand-strong); font-weight: 600; }
+.catalog-error { color: #a22626 !important; font-weight: 600; }
+.catalog-notice { color: #16623b !important; font-weight: 600; }
+@media (max-width: 900px) {
+  .catalog-columns { grid-template-columns: 1fr; }
+  .catalog-picker { position: static; }
+  .catalog-family-list { grid-template-columns: repeat(auto-fit, minmax(156px, 1fr)); max-height: 200px; }
+}

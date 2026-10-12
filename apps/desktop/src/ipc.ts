@@ -94,6 +94,7 @@ export type CatalogSnapshot = {
 };
 export type CatalogMutation = { id: string };
 export type NewCatalogOption = { kind: CatalogOptionKind; code: string; name: string };
+export type NewProductFamily = { code: string; name: string; categoryId?: string | null; brandId?: string | null };
 export type AssignFamilyCatalog = { familyId: string; categoryId?: string | null; brandId?: string | null };
 export type NewPriceList = {
   distributorId: string; code: string; name: string; priceType: string;
@@ -115,6 +116,30 @@ export type CatalogResolution = {
   };
   priceStatus: 'FOUND' | 'NOT_FOUND' | 'AMBIGUOUS' | 'NOT_REQUESTED';
   referencePrice: null | { priceListId: string; amountVnd: number; unitCode: string };
+};
+
+export type SkuMetric = {
+  distributorId: string; productId: string; sourceKind: 'SALES_IN' | 'SALES_OUT';
+  quantityMicro: number; netAmountVnd: number; firstDate: string; lastDate: string;
+  transactionRows: number;
+};
+
+export type CatalogImportKind = 'CATEGORY' | 'BRAND' | 'UNIT_CATALOG' | 'FAMILY' | 'SKU' | 'CONVERSION' | 'ALIAS' | 'PRICE';
+export type CatalogImportRequest = {
+  fileName: string; bytes: number[]; sheetName: string; headerRow: number;
+  kind: CatalogImportKind; columns: Record<string, number>;
+  fixedValues?: Record<string, string>;
+  distributorId?: string | null; priceListId?: string | null;
+};
+export type CatalogRowStatus = { row: number; status: 'ADDED' | 'UNCHANGED' | 'ERROR'; message: string };
+export type CatalogBatchPreview = {
+  fingerprint: string; totalRows: number; insertedRows: number; unchangedRows: number;
+  errorRows: number; issues: CatalogRowStatus[]; sample: CatalogRowStatus[]; alreadyImported: boolean;
+};
+export type CatalogBatchResult = { id: string; insertedRows: number; unchangedRows: number; alreadyImported: boolean };
+export type CatalogImportHistory = {
+  id: string; kind: CatalogImportKind; sourceFileName: string; sourceSheet: string;
+  totalRows: number; insertedRows: number; unchangedRows: number; createdAtUtc: string;
 };
 
 export type ImportKind = 'SALES_IN' | 'SALES_OUT';
@@ -177,6 +202,9 @@ export const desktopApi = {
   updateOperator: (request: OperatorInput) =>
     call<LocalOperator>('update_operator', { request }),
   listCatalog: () => call<CatalogSnapshot>('list_catalog'),
+  listSkuMetrics: () => call<SkuMetric[]>('list_sku_metrics'),
+  createProductFamily: (request: NewProductFamily) =>
+    call<CatalogMutation>('create_product_family', { request }),
   createCatalogOption: (request: NewCatalogOption) =>
     call<CatalogMutation>('create_catalog_option', { request }),
   assignFamilyCatalog: (request: AssignFamilyCatalog) =>
@@ -189,6 +217,11 @@ export const desktopApi = {
     call<CatalogMutation>('close_price_item', { request }),
   resolveCatalogSku: (request: ResolveCatalogRequest) =>
     call<CatalogResolution>('resolve_catalog_sku', { request }),
+  previewCatalogImport: (request: CatalogImportRequest) =>
+    call<CatalogBatchPreview>('preview_catalog_import', { request }),
+  commitCatalogImport: (request: CatalogImportRequest, expectedFingerprint: string) =>
+    call<CatalogBatchResult>('commit_catalog_import', { request, expectedFingerprint }),
+  listCatalogImportHistory: () => call<CatalogImportHistory[]>('list_catalog_import_history'),
   listMasterData: () => call<MasterSnapshot>('list_master_data'),
   createMasterItem: (request: NewMasterItem) => call<MasterMutation>('create_master_item', { request }),
   renameMasterItem: (request: { kind: MasterKind; id: string; name: string }) => call<MasterMutation>('rename_master_item', { request }),
@@ -208,19 +241,19 @@ export const desktopApi = {
     call<void>('save_import_mapping_profile', { request }),
 };
 
-type Command = 'list_catalog' | 'create_catalog_option' | 'assign_family_catalog'
+type Command = 'list_sku_metrics' | 'create_product_family' | 'preview_catalog_import' | 'commit_catalog_import' | 'list_catalog_import_history' | 'list_catalog' | 'create_catalog_option' | 'assign_family_catalog'
   | 'create_price_list' | 'create_price_item' | 'close_price_item' | 'resolve_catalog_sku'
   | 'health' | 'get_operator' | 'create_operator' | 'update_operator'
   | 'list_master_data' | 'create_master_item' | 'rename_master_item'
   | 'set_master_active' | 'create_master_link' | 'end_master_link' | 'inspect_import_file' | 'preview_import' | 'commit_import' | 'list_import_history'
   | 'get_import_mapping_profile' | 'save_import_mapping_profile';
-type NativeRequest = NewCatalogOption | AssignFamilyCatalog | NewPriceList | NewPriceItem
+type NativeRequest = NewProductFamily | CatalogImportRequest | NewCatalogOption | AssignFamilyCatalog | NewPriceList | NewPriceItem
   | ResolveCatalogRequest | { id: string; effectiveTo: string }
   | OperatorInput | NewMasterItem | NewMasterLink | ImportRequest | ImportMappingSaveRequest
   | { kind: MasterKind; id: string; name: string }
   | { kind: MasterKind; id: string; active: boolean }
   | { kind: MasterLinkKind; id: string; effectiveTo: string };
-async function call<T>(command: Command, args?: { request?: NativeRequest; fileName?: string; bytes?: number[]; expectedSha256?: string; replaceExisting?: boolean;
+async function call<T>(command: Command, args?: { request?: NativeRequest; fileName?: string; bytes?: number[]; expectedSha256?: string; expectedFingerprint?: string; replaceExisting?: boolean;
   kind?: ImportKind; distributorId?: string; headers?: string[] }): Promise<T> {
   try {
     return await invoke<T>(command, args);
