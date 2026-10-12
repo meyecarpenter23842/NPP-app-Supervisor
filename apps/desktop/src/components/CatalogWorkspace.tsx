@@ -89,7 +89,8 @@ function CatalogExcel({ master, catalog, onChange }: {
     }
     return { fileName: chosen.fileName, bytes: chosen.bytes, sheetName: sheet.name,
       headerRow: header.row, kind, columns: mapped, fixedValues: fixed,
-      distributorId: scopeNpp || null, priceListId: scopeList || null };
+      distributorId: mapped.distributorCode === undefined ? (scopeNpp || null) : null,
+      priceListId: mapped.priceListCode === undefined ? (scopeList || null) : null };
   }
   async function chooseFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -236,6 +237,7 @@ export default function CatalogWorkspace({ view }: { view: string }) {
   const [categoryId, setCategoryId] = useState(''); const [brandId, setBrandId] = useState('');
   const [skuCode, setSkuCode] = useState(''); const [skuName, setSkuName] = useState(''); const [skuUnit, setSkuUnit] = useState('');
   const [unitCode, setUnitCode] = useState(''); const [ratioNum, setRatioNum] = useState('1'); const [ratioDen, setRatioDen] = useState('1');
+  const [aliasUnitCode, setAliasUnitCode] = useState(''); const [priceUnitCode, setPriceUnitCode] = useState('');
   const [rawCode, setRawCode] = useState(''); const [aliasFrom, setAliasFrom] = useState(''); const [aliasTo, setAliasTo] = useState('');
   const [listCode, setListCode] = useState(''); const [listName, setListName] = useState(''); const [priceType, setPriceType] = useState('');
   const [listFrom, setListFrom] = useState(''); const [listTo, setListTo] = useState('');
@@ -247,6 +249,7 @@ export default function CatalogWorkspace({ view }: { view: string }) {
     setMaster(m); setCatalog(c); setMetrics(actual);
     setFamilyId(prev => m.families.some(f => f.id === prev) ? prev : (m.families[0]?.id ?? ''));
     setSkuId(prev => m.skus.some(f => f.id === prev) ? prev : (m.skus[0]?.id ?? ''));
+    setEditName(prev => prev || m.families[0]?.name || '');
     setNppId(prev => m.distributors.some(f => f.id === prev) ? prev : (m.distributors[0]?.id ?? ''));
     setListId(prev => c.priceLists.some(p => p.id === prev) ? prev : (c.priceLists[0]?.id ?? ''));
   }, [view]);
@@ -263,25 +266,29 @@ export default function CatalogWorkspace({ view }: { view: string }) {
   const selectedList = activeLists.some(x => x.id === listId) ? listId : (activeLists[0]?.id ?? '');
   const familySkus = master.skus.filter(x => x.parentId === familyId);
   const registeredUnits = master.links.filter(x => x.kind === 'SKU_UNIT' && x.subjectId === skuId);
+  const aliasUnit = registeredUnits.find(x => x.unitCode === aliasUnitCode);
+  const priceUnit = registeredUnits.find(x => x.unitCode === priceUnitCode);
   const skuAliases = master.links.filter(x => x.kind === 'SKU_ALIAS' && x.subjectId === skuId);
   const priceRows = catalog.priceItems.filter(x => x.priceListId === selectedList);
   const searchMatch = master.families.filter(x =>
     [x.code, x.name].some(v => v.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))));
   const selectFamily = (id: string) => { setFamilyId(id); const first=master.skus.find(x => x.parentId === id);
-    setSkuId(first?.id ?? ''); setEditName(master.families.find(x => x.id === id)?.name ?? ''); };
+    setSkuId(first?.id ?? ''); setAliasUnitCode(''); setPriceUnitCode('');
+    setEditName(master.families.find(x => x.id === id)?.name ?? ''); };
   function addFamily(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); void mutate(async () => {
       const created = await desktopApi.createProductFamily({
         code: familyCode, name: familyName, categoryId: categoryId || null, brandId: brandId || null,
       });
-      setFamilyId(created.id); setFamilyCode(''); setFamilyName('');
+      setFamilyId(created.id); setSkuId(''); setAliasUnitCode(''); setPriceUnitCode('');
+       setEditName(familyName); setFamilyCode(''); setFamilyName('');
     }, 'Đã lưu sản phẩm chuẩn.');
   }
   function addSku(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); if (!familyId) {setError('Cần chọn sản phẩm trước.'); return;}
     void mutate(async () => {
       const created=await desktopApi.createMasterItem({ kind: 'SKU', code: skuCode, name: skuName, parentId: familyId, detail: skuUnit });
-      setSkuId(created.id); setSkuCode(''); setSkuName('');
+      setSkuId(created.id); setAliasUnitCode(''); setPriceUnitCode(''); setSkuCode(''); setSkuName('');
     }, 'Đã lưu SKU và đơn vị cơ sở.');
   }
   function addOption(e: FormEvent<HTMLFormElement>) {
@@ -299,8 +306,8 @@ export default function CatalogWorkspace({ view }: { view: string }) {
     }, 'Đã lưu đơn vị và tỷ lệ quy đổi.');
   }
   function addAlias(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault(); const unit=registeredUnits.find(x => x.unitCode === unitCode) ?? registeredUnits[0];
-    if (!unit || !skuId || !selectedNpp) {setError('Cần chọn SKU, đơn vị đã quy đổi và NPP.'); return;}
+    e.preventDefault(); const unit = aliasUnit;
+    if (!unit || !skuId || !selectedNpp) {setError('Cần chọn đúng SKU, đơn vị NPP đã quy đổi và nhà phân phối.'); return;}
     void mutate(async () => {
       await desktopApi.createMasterLink({ kind: 'SKU_ALIAS', subjectId: skuId, distributorId: selectedNpp,
         externalCode: rawCode, unitCode: unit.unitCode, ratioNum: unit.ratioNum, ratioDen: unit.ratioDen,
@@ -321,8 +328,7 @@ export default function CatalogWorkspace({ view }: { view: string }) {
     if (!/^\d+$/.test(amount) || !Number.isSafeInteger(Number(amount))) {
       setError('Giá phải là số VND nguyên không âm.'); return;
     }
-    const priceUnit = registeredUnits.find(x => x.unitCode === unitCode) ?? registeredUnits[0];
-    if (!priceUnit) {setError('SKU chưa có đơn vị để định giá.'); return;}
+    if (!priceUnit) {setError('Cần chọn đơn vị giá đã đăng ký cho SKU.'); return;}
     void mutate(async () => {
       await desktopApi.createPriceItem({ priceListId: selectedList, productId: skuId, unitCode: priceUnit.unitCode ?? '',
         amountVnd: Number(amount), effectiveFrom: priceFrom, effectiveTo: priceTo || null });
@@ -347,12 +353,15 @@ export default function CatalogWorkspace({ view }: { view: string }) {
       <form onSubmit={addPriceItem} className="catalog-form-grid">
         <label>Bảng giá<select required value={selectedList} onChange={e => setListId(e.target.value)}>
           <option value="">Chọn bảng giá</option>{activeLists.map(x => <option key={x.id} value={x.id}>{x.code} · {x.priceType}</option>)}</select></label>
-        <label>Đơn vị giá<select value={unitCode} onChange={e => setUnitCode(e.target.value)}>
-          {registeredUnits.map(x => <option key={x.id} value={x.unitCode ?? ''}>{x.unitCode}</option>)}</select></label>
+        <label>SKU chuẩn<select required value={skuId} onChange={e => { setSkuId(e.target.value); setPriceUnitCode(''); setAliasUnitCode(''); }}>
+          <option value="">Chọn SKU</option>{(view === 'Mã NPP & bảng giá' ? master.skus : familySkus).map(x =>
+            <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></label>
+        <label>Đơn vị giá<select required value={priceUnit?.unitCode ?? ''} onChange={e => setPriceUnitCode(e.target.value)}>
+          <option value="">Chọn đơn vị giá</option>{registeredUnits.map(x => <option key={x.id} value={x.unitCode ?? ''}>{x.unitCode}</option>)}</select></label>
         <label>Giá tham khảo (VND)<input required inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)} /></label>
         <label>Áp dụng từ<input required type="date" value={priceFrom} onChange={e => setPriceFrom(e.target.value)} /></label>
         <label>Đến ngày<input type="date" value={priceTo} onChange={e => setPriceTo(e.target.value)} /></label>
-        <button type="submit" disabled={busy || !selectedList || !skuId}>Lưu giá</button>
+        <button type="submit" disabled={busy || !selectedList || !skuId || !priceUnit}>Lưu giá</button>
       </form>
       <p className="catalog-small">Giá chỉ để tham khảo, không ghi doanh thu Sales In/Out. Trùng khoảng ngày sẽ bị chặn.</p>
     </section>;
@@ -385,7 +394,7 @@ export default function CatalogWorkspace({ view }: { view: string }) {
         <label>Đơn vị cơ sở<input required value={skuUnit} onChange={e => setSkuUnit(e.target.value)} placeholder="Ví dụ: LON" /></label>
         <button type="submit" disabled={busy || !familyId}>Lưu SKU</button>
       </form>
-      <label>SKU đang chọn<select value={skuId} onChange={e => setSkuId(e.target.value)}>
+      <label>SKU đang chọn<select value={skuId} onChange={e => { setSkuId(e.target.value); setAliasUnitCode(''); setPriceUnitCode(''); }}>
         <option value="">Chọn SKU</option>{familySkus.map(x => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></label>
     </section>
     <section className="content-panel catalog-panel">
@@ -405,11 +414,11 @@ export default function CatalogWorkspace({ view }: { view: string }) {
         <label>Nhà phân phối<select required value={selectedNpp} onChange={e => setNppId(e.target.value)}>
           <option value="">Chọn NPP</option>{master.distributors.map(x => <option value={x.id} key={x.id}>{x.code} · {x.name}</option>)}</select></label>
         <label>Mã hàng tại NPP<input required value={rawCode} onChange={e => setRawCode(e.target.value)} /></label>
-        <label>Đơn vị NPP<select value={unitCode} onChange={e => setUnitCode(e.target.value)}>
-          {registeredUnits.map(x => <option key={x.id} value={x.unitCode ?? ''}>{x.unitCode}</option>)}</select></label>
+        <label>Đơn vị NPP<select required value={aliasUnit?.unitCode ?? ''} onChange={e => setAliasUnitCode(e.target.value)}>
+          <option value="">Chọn đơn vị NPP</option>{registeredUnits.map(x => <option key={x.id} value={x.unitCode ?? ''}>{x.unitCode}</option>)}</select></label>
         <label>Từ ngày<input required type="date" value={aliasFrom} onChange={e => setAliasFrom(e.target.value)} /></label>
         <label>Đến ngày<input type="date" value={aliasTo} onChange={e => setAliasTo(e.target.value)} /></label>
-        <button type="submit" disabled={busy || !skuId || !registeredUnits.length}>Lưu mã NPP</button>
+        <button type="submit" disabled={busy || !skuId || !selectedNpp || !aliasUnit}>Lưu mã NPP</button>
       </form>
       <div className="catalog-chips">{skuAliases.map(x => <span key={x.id}>{master.distributors.find(n => n.id === x.distributorId)?.code ?? 'NPP'}:
         {x.externalCode} ({x.unitCode}) · {x.effectiveFrom}</span>)}</div>
@@ -442,7 +451,7 @@ export default function CatalogWorkspace({ view }: { view: string }) {
                 'Đã đổi trạng thái sản phẩm.')}>{family.active ? 'Ngừng sử dụng' : 'Sử dụng lại'}</button></form>
             <div className="catalog-excel-scroll"><table className="catalog-table"><thead><tr><th>SKU</th><th>Tên hàng</th><th>Đơn vị cơ sở</th><th>Trạng thái</th><th>Chọn</th></tr></thead>
               <tbody>{familySkus.map(x => <tr key={x.id}><td>{x.code}</td><td>{x.name}</td><td>{x.detail}</td><td>{x.active ? 'Đang dùng' : 'Ngừng dùng'}</td>
-                <td><button type="button" onClick={() => setSkuId(x.id)}>{skuId === x.id ? 'Đang chọn' : 'Chọn SKU'}</button></td></tr>)}</tbody></table></div>
+                <td><button type="button" onClick={() => { setSkuId(x.id); setAliasUnitCode(''); setPriceUnitCode(''); }}>{skuId === x.id ? 'Đang chọn' : 'Chọn SKU'}</button></td></tr>)}</tbody></table></div>
           </> : <p>{emptyMessage}</p>}
         </section>
       </div>}</div>
