@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormE
 import {
   desktopApi, normalizeIpcError,
   type CatalogSnapshot, type CatalogOptionKind, type CatalogImportKind,
-  type CatalogImportRequest, type CatalogBatchPreview, type CatalogImportHistory,
+  type CatalogImportRequest, type CatalogBatchPreview, type CatalogImportHistory, type CatalogResolution,
   type ImportFileView, type MasterSnapshot, type SkuMetric,
 } from '../ipc';
 
@@ -244,6 +244,13 @@ export default function CatalogWorkspace({ view }: { view: string }) {
   const [amount, setAmount] = useState(''); const [priceFrom, setPriceFrom] = useState(''); const [priceTo, setPriceTo] = useState('');
   const [closeId, setCloseId] = useState(''); const [closeDate, setCloseDate] = useState('');
   const [editName, setEditName] = useState('');
+  const [lookupCode, setLookupCode] = useState('');
+  const [lookupUnit, setLookupUnit] = useState('');
+  const [lookupDate, setLookupDate] = useState('');
+  const [lookupPriceType, setLookupPriceType] = useState('');
+  const [lookupResult, setLookupResult] = useState<CatalogResolution | null>(null);
+  const [lookupError, setLookupError] = useState('');
+  const [lookupBusy, setLookupBusy] = useState(false);
   const load = useCallback(async () => {
     const [m, c, actual] = await Promise.all([desktopApi.listMasterData(), desktopApi.listCatalog(), view === 'Phân tích SKU' ? desktopApi.listSkuMetrics() : Promise.resolve([])]);
     setMaster(m); setCatalog(c); setMetrics(actual);
@@ -259,6 +266,19 @@ export default function CatalogWorkspace({ view }: { view: string }) {
     try { await action(); await load(); setNotice(message); }
     catch (reason) { setError(normalizeIpcError(reason).message); }
     finally { setBusy(false); }
+  }
+  async function lookupSku(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLookupResult(null); setLookupError(''); setLookupBusy(true);
+    try {
+      const result = await desktopApi.resolveCatalogSku({
+        distributorId: nppId || master.distributors[0]?.id || '',
+        rawSkuCode: lookupCode, rawUnit: lookupUnit, businessDate: lookupDate,
+        priceType: lookupPriceType || null,
+      });
+      setLookupResult(result);
+    } catch (reason) { setLookupError(normalizeIpcError(reason).message); }
+    finally { setLookupBusy(false); }
   }
   const family = master.families.find(x => x.id === familyId);
   const selectedNpp = nppId || master.distributors[0]?.id || '';
@@ -459,8 +479,34 @@ export default function CatalogWorkspace({ view }: { view: string }) {
       </div>}</div>
     </div> : null}
     {view === 'Mã NPP & bảng giá' ? <>
+      <section className="content-panel catalog-panel">
+        <h2>Tra cứu SKU và giá theo mã NPP</h2>
+        <p>Tra mã hàng, đơn vị và ngày chứng từ. Chọn loại giá khi cần xem giá tham khảo. Không tự chọn khi dữ liệu thiếu hoặc có nhiều giá.</p>
+        <form className="catalog-form-grid" onSubmit={lookupSku}>
+          <label>Mã hàng tại NPP<input required value={lookupCode} onChange={e => { setLookupCode(e.target.value); setLookupResult(null); }} /></label>
+          <label>Đơn vị trên chứng từ<input required value={lookupUnit} onChange={e => { setLookupUnit(e.target.value); setLookupResult(null); }} placeholder="Ví dụ: THUNG" /></label>
+          <label>Ngày chứng từ<input required type="date" value={lookupDate} onChange={e => { setLookupDate(e.target.value); setLookupResult(null); }} /></label>
+          <label>Loại giá<select value={lookupPriceType} onChange={e => { setLookupPriceType(e.target.value); setLookupResult(null); }}>
+            <option value="">Chỉ tra SKU</option>{Array.from(new Set(activeLists.map(x => x.priceType))).map(value =>
+              <option key={value} value={value}>{value}</option>)}</select></label>
+          <button type="submit" disabled={lookupBusy || !selectedNpp}>{lookupBusy ? 'Đang tra cứu' : 'Tra mã và giá'}</button>
+        </form>
+        <ErrorLine error={lookupError} notice="" />
+        {lookupResult ? <div role="status">
+          {lookupResult.skuStatus === 'NOT_FOUND' ? <p className="catalog-error">Không tìm thấy mã hàng NPP và đơn vị phù hợp trong ngày đã chọn.</p> : null}
+          {lookupResult.skuStatus === 'AMBIGUOUS' ? <p className="catalog-error">Nhiều SKU cùng khớp mã NPP và ngày. Cần xử lý liên kết trước khi tra giá.</p> : null}
+          {lookupResult.product ? <p>SKU chuẩn: <strong>{lookupResult.product.skuCode} · {lookupResult.product.skuName}</strong>
+            {' · '}Sản phẩm: {lookupResult.product.familyName || 'Chưa phân nhóm'}
+            {' · '}Quy đổi: {lookupResult.product.conversionNum}/{lookupResult.product.conversionDen} về {lookupResult.product.baseUnit}</p> : null}
+          {lookupResult.priceStatus === 'FOUND' && lookupResult.referencePrice ? <p>Giá tham khảo:
+            <strong> {lookupResult.referencePrice.amountVnd.toLocaleString('vi-VN')} VND / {lookupResult.referencePrice.unitCode}</strong></p> : null}
+          {lookupResult.priceStatus === 'NOT_FOUND' ? <p className="catalog-error">Chưa có giá phù hợp theo loại giá, đơn vị và ngày đã chọn.</p> : null}
+          {lookupResult.priceStatus === 'AMBIGUOUS' ? <p className="catalog-error">Có nhiều giá hợp lệ cùng thời điểm. Cần chọn lại loại giá hoặc xử lý bảng giá trùng.</p> : null}
+          {lookupResult.priceStatus === 'NOT_REQUESTED' && lookupResult.product ? <p className="catalog-small">Chưa chọn loại giá; chỉ trả về SKU chuẩn.</p> : null}
+        </div> : null}
+      </section>
       <div className="content-panel catalog-panel"><h2>Danh sách mã NPP và giá tham khảo</h2>
-        <div className="catalog-form-grid"><label>Nhà phân phối<select value={selectedNpp} onChange={e => setNppId(e.target.value)}>
+        <div className="catalog-form-grid"><label>Nhà phân phối<select value={selectedNpp} onChange={e => { setNppId(e.target.value); setLookupResult(null); setLookupPriceType(''); }}>
           {master.distributors.map(x => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></label>
           <label>Bảng giá<select value={selectedList} onChange={e => setListId(e.target.value)}>
             {activeLists.map(x => <option key={x.id} value={x.id}>{x.code} · {x.name} · {x.priceType}</option>)}</select></label></div>
